@@ -20,22 +20,11 @@ from simhops.viz.rerun_viz import RerunVisualizer
 
 
 class RerunTrainingCallback(BaseCallback):
-    """Callback for logging training metrics to Rerun."""
+    """Callback for logging training metrics and ground truth to Rerun.
 
-    # Base waypoints from QuadcopterEnv (used for position estimation)
-    # Note: Actual waypoints are randomized per episode, this is just for viz estimation
-    BASE_WAYPOINTS: list[np.ndarray] = [
-        np.array([4.0, 0.0, 2.5]),
-        np.array([8.0, 4.0, 3.5]),
-        np.array([6.0, 9.0, 5.0]),
-        np.array([0.0, 11.0, 6.0]),
-        np.array([-6.0, 8.0, 5.0]),
-        np.array([-9.0, 3.0, 4.0]),
-        np.array([-8.0, -3.0, 3.0]),
-        np.array([-4.0, -8.0, 4.0]),
-        np.array([3.0, -6.0, 2.5]),
-        np.array([6.0, -2.0, 2.0]),
-    ]
+    Ground truth (position, waypoints) is passed via the info dict from
+    the environment, allowing accurate 3D visualization even with SubprocVecEnv.
+    """
 
     def __init__(
         self,
@@ -55,7 +44,6 @@ class RerunTrainingCallback(BaseCallback):
         self._log_3d_freq = log_3d_freq
         self._episode_rewards: list[float] = []
         self._episode_lengths: list[int] = []
-        self._current_waypoint_idx: int = 0
 
     def _on_step(self) -> bool:
         # Log 3D position and actions at high rate (~30fps)
@@ -63,17 +51,11 @@ class RerunTrainingCallback(BaseCallback):
             self._log_3d_state()
             self._log_actions()
 
-        # Check for completed episodes and waypoint info
-        for i, info in enumerate(self.locals.get("infos", [])):
-            # Track waypoint progress from step info (use first env)
-            if i == 0 and "current_waypoint_idx" in info:
-                self._current_waypoint_idx = info["current_waypoint_idx"]
-
-            # Check for terminal info which contains final_info with waypoints
+        # Check for completed episodes
+        for info in self.locals.get("infos", []):
+            # Check for terminal info - episode ended
             if "terminal_observation" in info:
-                # Episode ended - reset trajectory for viz
                 self._viz.reset()
-                self._current_waypoint_idx = 0
 
             if "episode" in info:
                 ep_reward = info["episode"]["r"]
@@ -102,58 +84,31 @@ class RerunTrainingCallback(BaseCallback):
         return True
 
     def _log_3d_state(self) -> None:
-        """Log 3D drone state from observations.
-
-        The observation structure (when include_position=False, 19 dims):
-        - velocity (3): indices 0:3
-        - orientation (4): indices 3:7
-        - acceleration (3): indices 7:10
-        - angular_velocity (3): indices 10:13
-        - relative_waypoint_normalized (3): indices 13:16
-        - progress (1): index 16
-        - distance_normalized (1): index 17
-        - speed_normalized (1): index 18
-
-        Since we don't have global position in obs, we estimate it from
-        the relative waypoint direction and current waypoint position.
-        """
+        """Log 3D drone state from ground truth in info dict."""
         try:
-            obs = self.locals.get("new_obs")
-            if obs is None or len(obs) == 0:
+            infos = self.locals.get("infos", [])
+            if not infos:
                 return
 
-            # Use first environment's observation
-            ob = obs[0]
+            # Use first environment's info
+            info = infos[0]
 
-            # Extract what we can from the 19-dim observation
-            if len(ob) >= 19:
-                velocity = np.array(ob[0:3])
-                orientation = np.array(ob[3:7])
-                relative_wp_normalized = np.array(ob[13:16])
-
-                # Estimate position from relative waypoint using base waypoints
-                wp_idx = min(self._current_waypoint_idx, len(self.BASE_WAYPOINTS) - 1)
-                current_wp = self.BASE_WAYPOINTS[wp_idx]
-
-                # Unscale relative waypoint (goal_max_distance = 12.0 for expanded path)
-                goal_max_distance = 12.0
-                relative_wp = relative_wp_normalized * goal_max_distance
-                estimated_position = current_wp - relative_wp
-
+            # Log drone position from ground truth
+            if "position" in info:
                 self._viz.log_drone_position(
                     self.num_timesteps,
-                    position=estimated_position,
-                    velocity=velocity,
-                    orientation=orientation,
-                    relative_waypoint=relative_wp_normalized,
+                    position=info["position"],
+                    velocity=info.get("velocity"),
+                    orientation=info.get("orientation"),
                 )
 
-            # Log base waypoints (approximate - actual are randomized)
-            self._viz.log_waypoints_training(
-                self.num_timesteps,
-                self.BASE_WAYPOINTS,
-                self._current_waypoint_idx,
-            )
+            # Log actual randomized waypoints
+            if "waypoints" in info:
+                self._viz.log_waypoints_training(
+                    self.num_timesteps,
+                    info["waypoints"],
+                    info.get("current_waypoint_idx", 0),
+                )
 
         except Exception:
             pass  # Silently fail - 3D viz is optional

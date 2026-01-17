@@ -331,6 +331,11 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             "current_waypoint_idx": self._current_waypoint_idx,
             "waypoint_reached": waypoint_reached,
             "episode_step": self._episode_step,
+            # Ground truth for visualization (passed through info dict)
+            "position": state.position.copy(),
+            "velocity": state.velocity.copy(),
+            "orientation": state.orientation.copy(),
+            "waypoints": self._waypoints,
         }
 
         # Waypoint reached - advance to next
