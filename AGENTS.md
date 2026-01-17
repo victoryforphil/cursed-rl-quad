@@ -67,10 +67,10 @@ uv run python -m simhops.evaluate demo
 
 ### Waypoint Path (Expanded)
 ```
-1: (4, 0, 2.5)    2: (8, 4, 3.5)    3: (6, 9, 5)
-4: (0, 11, 6)     5: (-6, 8, 5)     6: (-9, 3, 4)
-7: (-8, -3, 3)    8: (-4, -8, 4)    9: (3, -6, 2.5)
-10: (6, -2, 2)
+1: (5.5, 0, 3.3)    2: (10.5, 5.5, 4.5)    3: (7.5, 11.5, 6.2)
+4: (0, 14, 7.2)     5: (-7.5, 10, 6.2)     6: (-11.5, 4, 5.2)
+7: (-10, -4, 4.2)   8: (-5.5, -10.5, 5.2)  9: (4.5, -7.5, 3.5)
+10: (7.5, -2.5, 3.0)
 ```
 
 ### Default Parameters
@@ -84,6 +84,7 @@ uv run python -m simhops.evaluate demo
 - Model checkpoints are NOT committed - save important models externally
 - Use `--waypoint-noise 0.0` for deterministic evaluation
 - The 3D visualization estimates drone position from relative waypoint observations
+- `include_position` is considered a cheat for training runs; keep it disabled unless explicitly needed
 
 ## Logging Plan (Agent-Focused)
 

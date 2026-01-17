@@ -13,6 +13,8 @@ wheels/
 models/checkpoints/
 models/tensorboard/
 models/eval_logs/
+models/run_*/
+models/experiments.csv
 *.zip
 *.pkl
 

@@ -849,8 +849,37 @@ def train() -> None:
 
         if cfg.training.use_rerun:
             print("Initializing Rerun visualizer for training metrics...")
+            session_markdown = "\n".join(
+                [
+                    "# SimHops Training Session",
+                    f"- stage: {stage_label} ({stage_index}/{len(stages)})",
+                    f"- timesteps: {stage_timesteps}",
+                    f"- config: {Config.path() or 'cfg_default.yaml'}",
+                    "",
+                    "## Environment",
+                    f"- waypoint_noise: {stage_env_cfg.waypoint_noise}",
+                    f"- waypoint_yaw_random: {stage_env_cfg.waypoint_yaw_random}",
+                    f"- waypoint_radius: {stage_env_cfg.waypoint_radius}",
+                    f"- max_waypoints: {stage_env_cfg.max_waypoints}",
+                    f"- random_start_waypoint: {stage_env_cfg.random_start_waypoint}",
+                    f"- random_start_position: {stage_env_cfg.random_start_position}",
+                    f"- start_position_noise: {stage_env_cfg.start_position_noise}",
+                    f"- action_scale: {stage_env_cfg.action_scale}",
+                    f"- max_episode_steps: {stage_env_cfg.max_episode_steps}",
+                    "",
+                    "## PPO",
+                    f"- learning_rate: {cfg.ppo.learning_rate}",
+                    f"- n_steps: {cfg.ppo.n_steps}",
+                    f"- batch_size: {cfg.ppo.batch_size}",
+                    f"- n_epochs: {cfg.ppo.n_epochs}",
+                ]
+            )
+            recording_name = f"{cfg.visualization.training_app_id}:{stage_label}"
             viz = RerunVisualizer(
-                app_id=cfg.visualization.training_app_id, spawn=cfg.visualization.spawn
+                app_id=cfg.visualization.training_app_id,
+                spawn=cfg.visualization.spawn,
+                recording_name=recording_name,
+                session_markdown=session_markdown,
             )
             viz.init()
             rerun_callback = RerunTrainingCallback(

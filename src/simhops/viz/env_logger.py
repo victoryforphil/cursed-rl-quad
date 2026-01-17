@@ -197,7 +197,7 @@ class EnvLogger:
         self,
         waypoints: list[NDArray[np.float64]],
         current_idx: int,
-        radius: float = 1.0,
+        radius: float = 0.5,
     ) -> None:
         """Log waypoints with progress coloring.
 

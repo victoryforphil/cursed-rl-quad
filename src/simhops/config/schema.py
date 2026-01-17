@@ -82,7 +82,7 @@ class EnvConfig:
     random_start_waypoint: bool = False
     add_sensor_noise: bool = True
     max_waypoints: int | None = None
-    action_scale: float = 1.0
+    action_scale: float = 0.7
     random_start_position: bool = False
     start_position_noise: float = 0.0
     speed_normalization: float = 5.0

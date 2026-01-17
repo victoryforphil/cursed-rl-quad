@@ -45,6 +45,8 @@ class RerunVisualizer:
         app_id: str = "simhops",
         spawn: bool = True,
         ground_size: float = 25.0,
+        recording_name: str | None = None,
+        session_markdown: str | None = None,
     ) -> None:
         """Initialize Rerun visualizer.
 
@@ -52,9 +54,13 @@ class RerunVisualizer:
             app_id: Application ID for Rerun
             spawn: Whether to spawn the Rerun viewer
             ground_size: Size of ground plane in meters
+            recording_name: Optional name shown in the viewer
+            session_markdown: Optional markdown text for session context
         """
         self.app_id = app_id
         self._spawn = spawn
+        self._recording_name = recording_name
+        self._session_markdown = session_markdown
         self._initialized = False
 
         # Sub-loggers
@@ -67,10 +73,34 @@ class RerunVisualizer:
             return
 
         rr.init(self.app_id, spawn=self._spawn)
+        if self._recording_name:
+            rr.send_recording_name(self._recording_name)
         self._initialized = True
 
         # Initialize world (ground plane, coordinates)
         self.env.init_world()
+
+        if self._session_markdown:
+            rr.log(
+                "session/config",
+                rr.TextDocument(
+                    self._session_markdown, media_type=rr.MediaType.MARKDOWN
+                ),
+                static=True,
+            )
+            try:
+                import rerun.blueprint as rrb
+
+                blueprint = rrb.Blueprint(
+                    rrb.TextDocumentView(
+                        origin="session/config",
+                        name="Session",
+                    ),
+                    collapse_panels=True,
+                )
+                rr.send_blueprint(blueprint)
+            except Exception:
+                pass
 
     def reset(self) -> None:
         """Reset for new episode."""
@@ -130,7 +160,7 @@ class RerunVisualizer:
         self,
         waypoints: list[NDArray[np.float64]],
         current_idx: int,
-        radius: float = 1.0,
+        radius: float = 0.5,
     ) -> None:
         """Log waypoint positions."""
         if not self._initialized:
@@ -143,7 +173,7 @@ class RerunVisualizer:
         timestep: int,
         waypoints: list[NDArray[np.float64]],
         current_idx: int,
-        radius: float = 1.0,
+        radius: float = 0.5,
     ) -> None:
         """Log waypoints with timestep for training visualization."""
         if not self._initialized:

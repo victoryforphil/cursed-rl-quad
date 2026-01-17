@@ -119,7 +119,7 @@ env:
   # Max number of waypoints to complete (null = all)
   max_waypoints: null
   # Action magnitude scale (1.0 = full range)
-  action_scale: 0.8
+  action_scale: 0.7
   # Randomize initial position around [0, 0, 1]
   random_start_position: true
   # Max +/- meters per axis when randomizing start position
@@ -135,9 +135,9 @@ env:
 
 reward:
   # Reward multiplier for progress toward waypoint
-  progress_multiplier: 5.0
+  progress_multiplier: 3.0
   # Per-step time penalty
-  time_penalty: 0.01
+  time_penalty: 0.02
   # Bonus for reaching a waypoint
   waypoint_bonus: 50.0
   # Bonus for completing the full path

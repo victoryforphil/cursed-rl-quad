@@ -89,8 +89,26 @@ def evaluate(
                 print(f"Warning: Could not load obs_rms: {error}")
 
     # Initialize Rerun visualizer
+    session_markdown = "\n".join(
+        [
+            "# SimHops Evaluation",
+            f"- model_path: {model_path}",
+            f"- config: {Config.path() or 'cfg_default.yaml'}",
+            "",
+            "## Environment",
+            f"- waypoint_noise: {env_cfg.waypoint_noise}",
+            f"- waypoint_yaw_random: {env_cfg.waypoint_yaw_random}",
+            f"- include_position: {env_cfg.include_position}",
+            f"- add_sensor_noise: {env_cfg.add_sensor_noise}",
+            f"- disable_tilt_termination: {env_cfg.disable_tilt_termination}",
+        ]
+    )
+    recording_name = f"{cfg.visualization.eval_app_id}:{model_dir.name}"
     viz = RerunVisualizer(
-        app_id=cfg.visualization.eval_app_id, spawn=cfg.visualization.spawn
+        app_id=cfg.visualization.eval_app_id,
+        spawn=cfg.visualization.spawn,
+        recording_name=recording_name,
+        session_markdown=session_markdown,
     )
     viz.init()
 
@@ -243,8 +261,24 @@ def demo_random() -> None:
         waypoint_yaw_random=env_cfg.waypoint_yaw_random,
     )
 
+    session_markdown = "\n".join(
+        [
+            "# SimHops Demo",
+            f"- config: {Config.path() or 'cfg_default.yaml'}",
+            "",
+            "## Environment",
+            f"- waypoint_noise: {env_cfg.waypoint_noise}",
+            f"- waypoint_yaw_random: {env_cfg.waypoint_yaw_random}",
+            f"- include_position: {env_cfg.include_position}",
+            f"- add_sensor_noise: {env_cfg.add_sensor_noise}",
+            f"- disable_tilt_termination: {env_cfg.disable_tilt_termination}",
+        ]
+    )
     viz = RerunVisualizer(
-        app_id=cfg.visualization.demo_app_id, spawn=cfg.visualization.spawn
+        app_id=cfg.visualization.demo_app_id,
+        spawn=cfg.visualization.spawn,
+        recording_name=cfg.visualization.demo_app_id,
+        session_markdown=session_markdown,
     )
     viz.init()
 
