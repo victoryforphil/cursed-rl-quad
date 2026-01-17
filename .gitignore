@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Model checkpoints (large binary files)
+models/checkpoints/
+models/tensorboard/
+models/eval_logs/
+*.zip
+*.pkl
+
+# Keep model directories structure
+!models/.gitkeep
+!models/best_model/.gitkeep
+!models/final_model/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rerun recordings
+*.rrd
