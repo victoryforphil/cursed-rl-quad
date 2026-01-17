@@ -181,6 +181,10 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         self._episode_step: int = 0
         self._total_reward: float = 0.0
         self._prev_distance: float | None = None
+        self._episode_speed_sum: float = 0.0
+        self._episode_speed_steps: int = 0
+        self._episode_max_tilt: float = 0.0
+        self._time_to_first_wp: int | None = None
 
         # Observation space: sensor readings + waypoint info
         base_obs_dim = SensorReadings.observation_size() + 6
@@ -332,6 +336,10 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         self._episode_step = 0
         self._total_reward = 0.0
         self._prev_distance = None
+        self._episode_speed_sum = 0.0
+        self._episode_speed_steps = 0
+        self._episode_max_tilt = 0.0
+        self._time_to_first_wp = None
 
         # Reset quadcopter
         state = self._quad.reset()
@@ -377,6 +385,13 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         distance = float(np.linalg.norm(state.position - current_wp))
         speed = float(np.linalg.norm(state.velocity))
 
+        self._episode_speed_sum += speed
+        self._episode_speed_steps += 1
+
+        tilt = self._quad.get_tilt_angle()
+        if tilt > self._episode_max_tilt:
+            self._episode_max_tilt = tilt
+
         # Check if passed through waypoint (simple radius check)
         waypoint_reached = distance < self.waypoint_radius
 
@@ -387,9 +402,18 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         # Check termination conditions
         terminated = False
         truncated = False
+        mean_speed = (
+            self._episode_speed_sum / self._episode_speed_steps
+            if self._episode_speed_steps > 0
+            else 0.0
+        )
+
         info: dict[str, Any] = {
             "distance": distance,
             "speed": speed,
+            "mean_speed": mean_speed,
+            "max_tilt_deg": math.degrees(self._episode_max_tilt),
+            "time_to_first_wp": self._time_to_first_wp,
             "current_waypoint_idx": self._current_waypoint_idx,
             "waypoint_reached": waypoint_reached,
             "episode_step": self._episode_step,
@@ -404,6 +428,8 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         if waypoint_reached:
             self._current_waypoint_idx += 1
             self._prev_distance = None  # Reset for next waypoint
+            if self._time_to_first_wp is None:
+                self._time_to_first_wp = self._episode_step
 
             if self._current_waypoint_idx >= self.num_waypoints:
                 # All waypoints completed! Big time bonus

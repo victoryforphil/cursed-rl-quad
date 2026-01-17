@@ -6,6 +6,7 @@ Runs a single episode and logs drone position, rotation, and goal waypoint to Re
 from __future__ import annotations
 
 import argparse
+import csv
 import time
 from pathlib import Path
 
@@ -18,7 +19,11 @@ from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.viz.rerun_viz import RerunVisualizer
 
 
-def evaluate(model_path: str) -> None:
+def evaluate(
+    model_path: str,
+    eval_output: Path | None = None,
+    episodes: int = 1,
+) -> None:
     """Evaluate trained model with Rerun visualization.
 
     Runs a single episode on the fixed 10-waypoint path.
@@ -88,102 +93,135 @@ def evaluate(model_path: str) -> None:
     )
     viz.init()
 
-    # Run single episode
-    print("\n--- Running evaluation episode ---")
-    obs, info = env.reset()
-    viz.reset()
-
-    # Log the fixed waypoints
-    viz.log_waypoints(
-        info["waypoints"],
-        info["current_waypoint_idx"],
-        radius=env.waypoint_radius,
-    )
-
-    done = False
-    total_reward = 0.0
-    step = 0
-
-    while not done:
-        # Normalize observation if we have stats
-        if obs_rms is not None and hasattr(obs_rms, "mean") and hasattr(obs_rms, "var"):
-            obs_mean = getattr(obs_rms, "mean")
-            obs_var = getattr(obs_rms, "var")
-            obs_normalized = (obs - obs_mean) / np.sqrt(obs_var + 1e-8)
-            obs_normalized = np.clip(obs_normalized, -10.0, 10.0)
-        else:
-            obs_normalized = obs
-
-        # Get action (deterministic)
-        action, _ = model.predict(obs_normalized, deterministic=True)
-
-        # Step environment
-        obs, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        total_reward += float(reward)
-        step += 1
-
-        # Get quadcopter state for visualization
-        if env._quad is not None:
-            state = env._quad.get_state()
-            current_waypoint_idx = info["current_waypoint_idx"]
-
-            # Clamp to valid index for logging
-            wp_idx = min(current_waypoint_idx, env.num_waypoints - 1)
-            current_waypoint = env._waypoints[wp_idx]
-
-            # Log drone state
-            viz.log_drone_position(
-                step,
-                position=state.position,
-                velocity=state.velocity,
-                orientation=state.orientation,
-            )
-
-            # Log current goal waypoint and drone info as text
-            viz.log_waypoints_training(
-                step,
-                env._waypoints,
-                current_waypoint_idx,
-            )
-
-            # Log metrics
-            viz.log_training_metrics(
-                step,
-                episode_reward=float(reward),
-            )
-
-            viz.log_actions(step, action)
-
-        # Real-time visualization
-        if eval_cfg.realtime:
-            time.sleep(env.dt * eval_cfg.slow_motion)
-
-        # Print progress every 100 steps
-        if step % 100 == 0:
-            print(
-                f"  Step {step}: waypoint={info['current_waypoint_idx']}/{env.num_waypoints}, "
-                f"dist={info['distance']:.2f}m, speed={info['speed']:.2f}m/s"
-            )
-
-    # Episode complete
-    success = info.get("success", False)
-    crash = info.get("crash", None)
-
-    print(f"\n=== Episode Results ===")
-    print(f"Steps: {step}")
-    print(f"Total reward: {total_reward:.1f}")
-    print(f"Waypoints reached: {info['current_waypoint_idx']}/{env.num_waypoints}")
-
-    if success:
-        completion_steps = info.get("completion_steps", step)
-        print(
-            f"SUCCESS! Completed in {completion_steps} steps ({completion_steps * env.dt:.1f}s)"
+    eval_writer = None
+    eval_file = None
+    if eval_output is not None:
+        eval_output.parent.mkdir(parents=True, exist_ok=True)
+        eval_file = eval_output.open("w", newline="", encoding="utf-8")
+        eval_writer = csv.DictWriter(
+            eval_file,
+            fieldnames=[
+                "eval_run",
+                "model_path",
+                "episode",
+                "reward",
+                "length",
+                "waypoints_reached",
+                "success",
+                "crash_type",
+                "completion_time_s",
+            ],
         )
-    elif crash:
-        print(f"CRASH: {crash}")
-    else:
-        print("TIMEOUT: Did not complete all waypoints")
+        eval_writer.writeheader()
+
+    for episode_idx in range(1, episodes + 1):
+        print("\n--- Running evaluation episode ---")
+        obs, info = env.reset()
+        viz.reset()
+
+        viz.log_waypoints(
+            info["waypoints"],
+            info["current_waypoint_idx"],
+            radius=env.waypoint_radius,
+        )
+
+        done = False
+        total_reward = 0.0
+        step = 0
+
+        while not done:
+            if (
+                obs_rms is not None
+                and hasattr(obs_rms, "mean")
+                and hasattr(obs_rms, "var")
+            ):
+                obs_mean = getattr(obs_rms, "mean")
+                obs_var = getattr(obs_rms, "var")
+                obs_normalized = (obs - obs_mean) / np.sqrt(obs_var + 1e-8)
+                obs_normalized = np.clip(obs_normalized, -10.0, 10.0)
+            else:
+                obs_normalized = obs
+
+            action, _ = model.predict(obs_normalized, deterministic=True)
+
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            total_reward += float(reward)
+            step += 1
+
+            if env._quad is not None:
+                state = env._quad.get_state()
+                current_waypoint_idx = info["current_waypoint_idx"]
+
+                wp_idx = min(current_waypoint_idx, env.num_waypoints - 1)
+
+                viz.log_drone_position(
+                    step,
+                    position=state.position,
+                    velocity=state.velocity,
+                    orientation=state.orientation,
+                )
+
+                viz.log_waypoints_training(
+                    step,
+                    env._waypoints,
+                    current_waypoint_idx,
+                )
+
+                viz.log_training_metrics(
+                    step,
+                    episode_reward=float(reward),
+                )
+
+                viz.log_actions(step, action)
+
+            if eval_cfg.realtime:
+                time.sleep(env.dt * eval_cfg.slow_motion)
+
+            if step % 100 == 0:
+                print(
+                    f"  Step {step}: waypoint={info['current_waypoint_idx']}/{env.num_waypoints}, "
+                    f"dist={info['distance']:.2f}m, speed={info['speed']:.2f}m/s"
+                )
+
+        success = info.get("success", False)
+        crash = info.get("crash", None)
+
+        print(f"\n=== Episode Results ===")
+        print(f"Steps: {step}")
+        print(f"Total reward: {total_reward:.1f}")
+        print(f"Waypoints reached: {info['current_waypoint_idx']}/{env.num_waypoints}")
+
+        completion_steps = None
+        if success:
+            completion_steps = info.get("completion_steps", step)
+            print(
+                f"SUCCESS! Completed in {completion_steps} steps ({completion_steps * env.dt:.1f}s)"
+            )
+        elif crash:
+            print(f"CRASH: {crash}")
+        else:
+            print("TIMEOUT: Did not complete all waypoints")
+
+        if eval_writer is not None:
+            eval_writer.writerow(
+                {
+                    "eval_run": episode_idx,
+                    "model_path": str(model_dir),
+                    "episode": episode_idx,
+                    "reward": total_reward,
+                    "length": step,
+                    "waypoints_reached": info.get("current_waypoint_idx", 0),
+                    "success": bool(success),
+                    "crash_type": crash,
+                    "completion_time_s": completion_steps * env.dt
+                    if completion_steps is not None
+                    else None,
+                }
+            )
+
+    if eval_file is not None:
+        eval_file.close()
 
     env.close()
 
@@ -263,6 +301,18 @@ def main() -> None:
     # Evaluate subcommand
     eval_parser = subparsers.add_parser("eval", help="Evaluate trained model")
     eval_parser.add_argument("model_path", type=str, help="Path to model directory")
+    eval_parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Optional CSV path for eval_results",
+    )
+    eval_parser.add_argument(
+        "--episodes",
+        type=int,
+        default=1,
+        help="Number of evaluation episodes",
+    )
 
     # Demo subcommand
     subparsers.add_parser("demo", help="Run random action demo")
@@ -272,7 +322,12 @@ def main() -> None:
     Config.load(args.config)
 
     if args.command == "eval":
-        evaluate(model_path=args.model_path)
+        output_path = Path(args.output) if args.output else None
+        evaluate(
+            model_path=args.model_path,
+            eval_output=output_path,
+            episodes=args.episodes,
+        )
     elif args.command == "demo":
         demo_random()
 
