@@ -210,7 +210,6 @@ def train() -> None:
             eval_checkpoint_callback = EvalCheckpointCallback(
                 checkpoint_dir=checkpoint_path,
                 eval_rrd_dir=eval_rrd_dir,
-                run_dir=run_path,
                 checkpoint_freq=cfg.callbacks.checkpoint_freq,
                 n_eval_episodes=cfg.callbacks.eval_checkpoint_episodes,
                 stage_index=stage_index,

@@ -20,7 +20,6 @@ class EvalCheckpointCallback(BaseCallback):
         self,
         checkpoint_dir: Path,
         eval_rrd_dir: Path,
-        run_dir: Path,
         checkpoint_freq: int,
         n_eval_episodes: int = 1,
         stage_index: int = 1,
@@ -32,7 +31,6 @@ class EvalCheckpointCallback(BaseCallback):
         Args:
             checkpoint_dir: Directory where checkpoints are saved
             eval_rrd_dir: Directory to save evaluation .rrd files
-            run_dir: Run directory containing training metrics
             checkpoint_freq: Checkpoint frequency (in timesteps)
             n_eval_episodes: Number of episodes to run per evaluation
             stage_index: Current curriculum stage index
@@ -42,7 +40,6 @@ class EvalCheckpointCallback(BaseCallback):
         super().__init__(verbose)
         self._checkpoint_dir = checkpoint_dir
         self._eval_rrd_dir = eval_rrd_dir
-        self._run_dir = run_dir
         self._checkpoint_freq = checkpoint_freq
         self._n_eval_episodes = n_eval_episodes
         self._stage_index = stage_index
@@ -87,8 +84,7 @@ class EvalCheckpointCallback(BaseCallback):
             f"Path('{output_rrd}'), "
             f"episodes={self._n_eval_episodes}, "
             f"recording_name='eval:{self._stage_name}:{self.num_timesteps}', "
-            f"spawn_viewer=True, "
-            f"run_dir=Path('{self._run_dir}')"
+            f"spawn_viewer=True"
             f")",
         ]
 

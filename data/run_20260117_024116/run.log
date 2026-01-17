@@ -1,0 +1,33 @@
+2026-01-17 02:41:16 INFO Run run_20260117_024116 started at 2026-01-17T02:41:16
+2026-01-17 02:41:16 INFO Run directory: models/run_20260117_024116
+2026-01-17 02:41:16 INFO Log file: data/run_20260117_024116/run.log
+2026-01-17 02:41:16 INFO Starting stage 1/1: default (15000000 timesteps)
+2026-01-17 02:41:16 INFO Env: noise=1.00, yaw_random=True, sensor_noise=True, random_start=False, max_waypoints=None, action_scale=0.7, start_pos_random=True, start_pos_noise=0.2
+2026-01-17 02:41:16 INFO Rerun TextLog entity: logs (run run_20260117_024116)
+2026-01-17 02:41:19 INFO Creating new PPO model...
+2026-01-17 02:41:20 INFO Starting training for 15000000 timesteps...
+2026-01-17 02:41:21 INFO Episodes: 50, Mean reward (100): -13.45, Mean length (100): 57, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:21 INFO Episodes: 100, Mean reward (100): -13.52, Mean length (100): 61, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:22 INFO Episodes: 150, Mean reward (100): -13.81, Mean length (100): 64, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:24 INFO Episodes: 200, Mean reward (100): -14.02, Mean length (100): 65, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:24 INFO Episodes: 250, Mean reward (100): -13.72, Mean length (100): 62, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:25 INFO Episodes: 300, Mean reward (100): -13.33, Mean length (100): 58, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:30 INFO Episodes: 350, Mean reward (100): -13.14, Mean length (100): 62, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:30 INFO Episodes: 400, Mean reward (100): -13.27, Mean length (100): 71, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:34 INFO Episodes: 450, Mean reward (100): -13.68, Mean length (100): 83, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:35 INFO Episodes: 500, Mean reward (100): -13.79, Mean length (100): 83, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:36 INFO Episodes: 550, Mean reward (100): -13.82, Mean length (100): 79, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:42 INFO Episodes: 600, Mean reward (100): -13.74, Mean length (100): 86, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:43 INFO Episodes: 650, Mean reward (100): -14.17, Mean length (100): 108, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:46 INFO Episodes: 700, Mean reward (100): -14.88, Mean length (100): 116, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:50 INFO Episodes: 750, Mean reward (100): -14.84, Mean length (100): 114, Mean waypoints (100): 0.0/10
+2026-01-17 02:41:56 INFO Episodes: 800, Mean reward (100): -14.74, Mean length (100): 149, Mean waypoints (100): 0.0/10
+2026-01-17 02:42:00 INFO Episodes: 850, Mean reward (100): -16.11, Mean length (100): 195, Mean waypoints (100): 0.0/10
+2026-01-17 02:42:08 INFO Episodes: 900, Mean reward (100): -17.79, Mean length (100): 272, Mean waypoints (100): 0.0/10
+2026-01-17 02:42:26 INFO Episodes: 950, Mean reward (100): -19.48, Mean length (100): 389, Mean waypoints (100): 0.0/10
+2026-01-17 02:42:43 INFO Episodes: 1000, Mean reward (100): -14.73, Mean length (100): 496, Mean waypoints (100): 0.0/10
+2026-01-17 02:43:02 INFO Episodes: 1050, Mean reward (100): -6.07, Mean length (100): 552, Mean waypoints (100): 0.1/10
+2026-01-17 02:43:26 INFO Episodes: 1100, Mean reward (100): -4.01, Mean length (100): 618, Mean waypoints (100): 0.1/10
+2026-01-17 02:43:46 INFO Episodes: 1150, Mean reward (100): 1.97, Mean length (100): 637, Mean waypoints (100): 0.2/10
+2026-01-17 02:44:07 INFO Episodes: 1200, Mean reward (100): 8.05, Mean length (100): 571, Mean waypoints (100): 0.2/10
+2026-01-17 02:44:14 WARNING Training interrupted by user.

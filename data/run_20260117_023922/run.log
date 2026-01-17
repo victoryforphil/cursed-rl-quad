@@ -1,0 +1,28 @@
+2026-01-17 02:39:22 INFO Run run_20260117_023922 started at 2026-01-17T02:39:22
+2026-01-17 02:39:22 INFO Run directory: models/run_20260117_023922
+2026-01-17 02:39:22 INFO Log file: data/run_20260117_023922/run.log
+2026-01-17 02:39:22 INFO Starting stage 1/1: default (15000000 timesteps)
+2026-01-17 02:39:22 INFO Env: noise=1.00, yaw_random=True, sensor_noise=True, random_start=False, max_waypoints=None, action_scale=0.7, start_pos_random=True, start_pos_noise=0.2
+2026-01-17 02:39:22 INFO Rerun TextLog entity: logs (run run_20260117_023922)
+2026-01-17 02:39:25 INFO Initializing Rerun visualizer for training metrics...
+2026-01-17 02:39:25 INFO Creating new PPO model...
+2026-01-17 02:39:26 INFO Starting training for 15000000 timesteps...
+2026-01-17 02:39:27 INFO Episodes: 50, Mean reward (100): -13.45, Mean length (100): 57, Success rate: 0.00%
+2026-01-17 02:39:28 INFO Episodes: 100, Mean reward (100): -13.52, Mean length (100): 61, Success rate: 0.00%
+2026-01-17 02:39:29 INFO Episodes: 150, Mean reward (100): -13.81, Mean length (100): 64, Success rate: 0.00%
+2026-01-17 02:39:31 INFO Episodes: 200, Mean reward (100): -14.10, Mean length (100): 65, Success rate: 0.00%
+2026-01-17 02:39:32 INFO Episodes: 250, Mean reward (100): -13.80, Mean length (100): 62, Success rate: 0.00%
+2026-01-17 02:39:32 INFO Episodes: 300, Mean reward (100): -13.34, Mean length (100): 58, Success rate: 0.00%
+2026-01-17 02:39:38 INFO Episodes: 350, Mean reward (100): -13.12, Mean length (100): 62, Success rate: 0.00%
+2026-01-17 02:39:39 INFO Episodes: 400, Mean reward (100): -13.20, Mean length (100): 70, Success rate: 0.00%
+2026-01-17 02:39:40 INFO Episodes: 450, Mean reward (100): -13.59, Mean length (100): 80, Success rate: 0.00%
+2026-01-17 02:39:45 INFO Episodes: 500, Mean reward (100): -13.63, Mean length (100): 81, Success rate: 0.00%
+2026-01-17 02:39:46 INFO Episodes: 550, Mean reward (100): -13.47, Mean length (100): 74, Success rate: 0.00%
+2026-01-17 02:39:55 INFO Episodes: 600, Mean reward (100): -13.56, Mean length (100): 75, Success rate: 0.00%
+2026-01-17 02:39:56 INFO Episodes: 650, Mean reward (100): -14.04, Mean length (100): 100, Success rate: 0.00%
+2026-01-17 02:40:02 INFO Episodes: 700, Mean reward (100): -13.95, Mean length (100): 117, Success rate: 0.00%
+2026-01-17 02:40:03 INFO Episodes: 750, Mean reward (100): -13.47, Mean length (100): 119, Success rate: 0.00%
+2026-01-17 02:40:11 INFO Episodes: 800, Mean reward (100): -13.55, Mean length (100): 131, Success rate: 0.00%
+2026-01-17 02:40:18 INFO Episodes: 850, Mean reward (100): -13.91, Mean length (100): 160, Success rate: 0.00%
+2026-01-17 02:40:22 WARNING Training interrupted by user.
+2026-01-17 02:40:22 INFO Model saved to models/run_20260117_023922/final_model

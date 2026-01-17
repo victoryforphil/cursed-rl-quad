@@ -1,0 +1,19 @@
+2026-01-17 02:47:33 INFO Run run_20260117_024733 started at 2026-01-17T02:47:33
+2026-01-17 02:47:33 INFO Run directory: models/run_20260117_024733
+2026-01-17 02:47:33 INFO Log file: data/run_20260117_024733/run.log
+2026-01-17 02:47:33 INFO Starting stage 1/1: default (15000000 timesteps)
+2026-01-17 02:47:33 INFO Env: noise=1.00, yaw_random=True, sensor_noise=True, random_start=False, max_waypoints=None, action_scale=0.7, start_pos_random=True, start_pos_noise=0.2
+2026-01-17 02:47:33 INFO Rerun TextLog entity: logs (run run_20260117_024733)
+2026-01-17 02:47:36 INFO Creating new PPO model...
+2026-01-17 02:47:37 INFO Starting training for 15000000 timesteps...
+2026-01-17 02:47:37 INFO Episodes: 50, Mean reward (100): -13.45, Mean length (100): 57, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:38 INFO Episodes: 100, Mean reward (100): -13.54, Mean length (100): 61, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:39 INFO Episodes: 150, Mean reward (100): -13.63, Mean length (100): 64, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:41 INFO Episodes: 200, Mean reward (100): -13.80, Mean length (100): 65, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:42 INFO Episodes: 250, Mean reward (100): -13.76, Mean length (100): 63, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:42 INFO Episodes: 300, Mean reward (100): -13.44, Mean length (100): 60, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:48 INFO Episodes: 350, Mean reward (100): -13.12, Mean length (100): 62, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:50 INFO Episodes: 400, Mean reward (100): -13.21, Mean length (100): 71, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:53 INFO Episodes: 450, Mean reward (100): -13.65, Mean length (100): 80, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:54 INFO Episodes: 500, Mean reward (100): -13.73, Mean length (100): 79, Mean waypoints (100): 0.0/10
+2026-01-17 02:47:55 INFO Episodes: 550, Mean reward (100): -13.96, Mean length (100): 78, Mean waypoints (100): 0.0/10
