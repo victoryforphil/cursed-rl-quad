@@ -88,23 +88,46 @@ class RerunVisualizer:
                 ),
                 static=True,
             )
-            try:
-                import rerun.blueprint as rrb
 
-                blueprint = rrb.Blueprint(
-                    rrb.TextDocumentView(
-                        origin="session/config",
-                        name="Session",
-                    ),
-                    collapse_panels=True,
-                )
-                rr.send_blueprint(blueprint)
-            except Exception:
-                pass
+        self._send_blueprint()
 
     def reset(self) -> None:
         """Reset for new episode."""
         self.env.reset_trajectory()
+
+    def _send_blueprint(self) -> None:
+        try:
+            import rerun.blueprint as rrb
+
+            blueprint = rrb.Blueprint(
+                rrb.Horizontal(
+                    rrb.Spatial3DView(
+                        origin="world",
+                        name="3D",
+                    ),
+                    rrb.Vertical(
+                        rrb.TimeSeriesView(
+                            origin="losses",
+                            name="Losses",
+                        ),
+                        rrb.TimeSeriesView(
+                            origin="training",
+                            contents=["training/episode_length"],
+                            name="Episode Length",
+                        ),
+                        rrb.TextDocumentView(
+                            origin="session/config",
+                            name="Config",
+                        ),
+                        name="Metrics",
+                    ),
+                    column_shares=[2, 1],
+                ),
+                collapse_panels=True,
+            )
+            rr.send_blueprint(blueprint)
+        except Exception:
+            return
 
     # =========================================================================
     # Convenience methods that delegate to sub-loggers
