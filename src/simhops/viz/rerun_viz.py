@@ -118,6 +118,10 @@ class RerunVisualizer:
                             origin="session/config",
                             name="Config",
                         ),
+                        rrb.TextLogView(
+                            origin="logs",
+                            name="Logs",
+                        ),
                         name="Metrics",
                     ),
                     column_shares=[2, 1],

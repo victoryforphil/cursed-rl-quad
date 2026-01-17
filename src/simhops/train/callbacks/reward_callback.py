@@ -32,7 +32,9 @@ class RewardLoggerCallback(BaseCallback):
                     mean_reward = np.mean(self._episode_rewards[-100:])
                     mean_length = np.mean(self._episode_lengths[-100:])
                     mean_waypoints = np.mean(self._waypoints_reached[-100:])
-                    print(
+                    from simhops.logging import log
+
+                    log(
                         f"Episodes: {self._total_episodes}, "
                         f"Mean reward (100): {mean_reward:.2f}, "
                         f"Mean length (100): {mean_length:.0f}, "

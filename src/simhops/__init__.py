@@ -3,5 +3,6 @@
 __version__ = "0.1.0"
 
 from simhops.envs.quadcopter_env import QuadcopterEnv
+from simhops.logging import log, setup_run_logging
 
-__all__ = ["QuadcopterEnv"]
+__all__ = ["QuadcopterEnv", "log", "setup_run_logging"]
