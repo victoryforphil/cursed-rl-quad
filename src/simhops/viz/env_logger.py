@@ -3,7 +3,7 @@
 Logs physical simulation state:
 - Drone position, velocity, orientation
 - Waypoints and progress
-- Trajectory trail
+- Snapshot trajectory visualization
 - Ground plane and world setup
 """
 
@@ -26,7 +26,7 @@ class EnvLogger:
     Handles all 3D world visualization:
     - Drone pose and motion
     - Waypoints with progress coloring
-    - Trajectory trails
+    - Snapshot trajectory visualization
     - World coordinate system and ground plane
     """
 
@@ -37,8 +37,6 @@ class EnvLogger:
             ground_size: Size of ground plane in meters
         """
         self._ground_size = ground_size
-        self._trajectory: list[NDArray[np.float64]] = []
-        self._max_trajectory_points = 1000
         self._initialized = False
 
     def init_world(self) -> None:
@@ -167,20 +165,6 @@ class EnvLogger:
                 ),
             )
 
-        # Update trajectory
-        self._trajectory.append(position.copy())
-        if len(self._trajectory) > self._max_trajectory_points:
-            self._trajectory = self._trajectory[-self._max_trajectory_points :]
-
-        if len(self._trajectory) > 1:
-            rr.log(
-                "world/drone/trajectory",
-                rr.LineStrips3D(
-                    [np.array(self._trajectory)],
-                    colors=[[100, 100, 255, 120]],
-                ),
-            )
-
     def log_drone_from_state(self, state: QuadcopterState) -> None:
         """Log drone from QuadcopterState object.
 
@@ -269,9 +253,124 @@ class EnvLogger:
                 ),
             )
 
+    def log_snapshot_trajectory(
+        self,
+        positions: list[NDArray[np.float64]],
+        orientations: list[NDArray[np.float64]] | None = None,
+        waypoints: list[NDArray[np.float64]] | None = None,
+        final_waypoint_idx: int = 0,
+        episode_reward: float | None = None,
+        arm_length: float = 0.17,
+    ) -> None:
+        """Log a complete episode trajectory as a snapshot.
+
+        Args:
+            positions: List of [x, y, z] positions throughout episode
+            orientations: List of [qw, qx, qy, qz] quaternions (optional)
+            waypoints: List of waypoint positions (optional)
+            final_waypoint_idx: Final waypoint index reached
+            episode_reward: Total episode reward (optional)
+            arm_length: Quadcopter arm length
+        """
+        if not positions:
+            return
+
+        # Log complete trajectory as single line (static reference)
+        trajectory_array = np.array(positions)
+        rr.log(
+            "world/snapshot/trajectory_line",
+            rr.LineStrips3D(
+                [trajectory_array],
+                colors=[[100, 100, 255, 180]],
+            ),
+        )
+
+        # Log waypoints if provided (static)
+        if waypoints:
+            self.log_waypoints(waypoints, final_waypoint_idx)
+
+        # Log episode summary (static)
+        if episode_reward is not None and waypoints:
+            summary_text = (
+                f"**Episode Snapshot**\n\n"
+                f"- Reward: {episode_reward:.1f}\n"
+                f"- Waypoints: {final_waypoint_idx}/{len(waypoints)}\n"
+                f"- Steps: {len(positions)}"
+            )
+            rr.log(
+                "snapshot/summary",
+                rr.TextDocument(summary_text, media_type=rr.MediaType.MARKDOWN),
+            )
+
+        # Now log animated drone flying through the course
+        # Each step gets its own timestamp on snapshot_step timeline
+        has_orientations = orientations and len(orientations) == len(positions)
+        
+        for step_idx, pos in enumerate(positions):
+            # Set the step timeline for animation
+            rr.set_time("snapshot_step", sequence=step_idx)
+            
+            # Log drone center
+            rr.log(
+                "world/snapshot/drone/center",
+                rr.Points3D(
+                    positions=[pos],
+                    colors=[[50, 50, 200, 255]],
+                    radii=[0.08],
+                ),
+            )
+            
+            # Log orientation if available
+            if has_orientations:
+                orient = orientations[step_idx]
+                qw, qx, qy, qz = orient
+                rot_matrix = self._quat_to_rotation_matrix(qx, qy, qz, qw)
+
+                # Motor positions
+                motor_offsets = np.array(
+                    [
+                        [arm_length, 0, 0],
+                        [-arm_length, 0, 0],
+                        [0, arm_length, 0],
+                        [0, -arm_length, 0],
+                    ]
+                )
+                motor_positions = pos + (rot_matrix @ motor_offsets.T).T
+
+                # Log arms
+                arm_lines = [
+                    [pos, motor_positions[0]],
+                    [pos, motor_positions[1]],
+                    [pos, motor_positions[2]],
+                    [pos, motor_positions[3]],
+                ]
+                rr.log(
+                    "world/snapshot/drone/arms",
+                    rr.LineStrips3D(
+                        arm_lines,
+                        colors=[
+                            [255, 50, 50, 255],
+                            [100, 100, 100, 255],
+                            [50, 255, 50, 255],
+                            [50, 255, 50, 255],
+                        ],
+                    ),
+                )
+
+                # Log up vector
+                body_z = rot_matrix @ np.array([0, 0, 0.25])
+                rr.log(
+                    "world/snapshot/drone/up",
+                    rr.Arrows3D(
+                        origins=[pos],
+                        vectors=[body_z],
+                        colors=[[255, 255, 0, 200]],
+                    ),
+                )
+
     def reset_trajectory(self) -> None:
-        """Clear trajectory for new episode."""
-        self._trajectory = []
+        """Clear trajectory for new episode (deprecated, kept for compatibility)."""
+        pass
 
     @staticmethod
     def _quat_to_rotation_matrix(

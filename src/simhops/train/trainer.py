@@ -18,7 +18,7 @@ from simhops.train.callbacks import (
     ExperimentSnapshotCallback,
     MetricsLoggerCallback,
     RewardLoggerCallback,
-    RerunTrainingCallback,
+    SnapshotRerunCallback,
 )
 from simhops.train.metrics import MetricsLogger
 from simhops.viz.rerun_viz import RerunVisualizer
@@ -236,8 +236,10 @@ def train() -> None:
                 session_markdown=session_markdown,
             )
             viz.init()
-            rerun_callback = RerunTrainingCallback(
-                viz, log_3d_freq=cfg.callbacks.log_3d_freq
+            rerun_callback = SnapshotRerunCallback(
+                viz,
+                snapshot_freq_updates=cfg.callbacks.snapshot_freq_updates,
+                snapshot_max_steps=cfg.callbacks.snapshot_max_steps,
             )
             callbacks.append(rerun_callback)
         else:

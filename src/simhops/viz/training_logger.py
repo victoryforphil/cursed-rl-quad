@@ -1,10 +1,9 @@
 """Training metrics logging to Rerun.
 
 Logs RL training data:
-- Episode rewards and lengths
+- Aggregated episode statistics (on PPO updates)
 - Policy/value losses
 - PPO diagnostics (KL, clip fraction, etc.)
-- Actions
 """
 
 from __future__ import annotations
@@ -21,36 +20,32 @@ if TYPE_CHECKING:
 class TrainingLogger:
     """Logs RL training metrics to Rerun.
 
-    Handles all scalar time-series data:
-    - Episode statistics (reward, length)
+    Handles scalar time-series data:
+    - Aggregated episode statistics
     - Loss curves
     - PPO diagnostics
-    - Action distributions
     """
 
-    def log_episode(
+    def log_aggregated_metrics(
         self,
-        episode_reward: float,
-        episode_length: int,
-        mean_reward: float | None = None,
-        waypoints_reached: int | None = None,
+        *,
+        mean_reward: float,
+        mean_length: float,
+        success_rate: float,
+        waypoints_per_episode: float,
     ) -> None:
-        """Log episode completion metrics.
+        """Log smoothed training progress (called on PPO update).
 
         Args:
-            episode_reward: Total reward for episode
-            episode_length: Number of steps in episode
-            mean_reward: Rolling mean reward (optional)
-            waypoints_reached: Number of waypoints reached (optional)
+            mean_reward: Rolling mean episode reward
+            mean_length: Rolling mean episode length
+            success_rate: Success rate (% episodes completing path)
+            waypoints_per_episode: Average waypoints reached per episode
         """
-        rr.log("training/episode_reward", rr.Scalars(episode_reward))
-        rr.log("training/episode_length", rr.Scalars(episode_length))
-
-        if mean_reward is not None:
-            rr.log("training/mean_reward_100", rr.Scalars(mean_reward))
-
-        if waypoints_reached is not None:
-            rr.log("training/waypoints_reached", rr.Scalars(waypoints_reached))
+        rr.log("progress/mean_reward", rr.Scalars(mean_reward))
+        rr.log("progress/mean_length", rr.Scalars(mean_length))
+        rr.log("progress/success_rate", rr.Scalars(success_rate))
+        rr.log("progress/waypoints_avg", rr.Scalars(waypoints_per_episode))
 
     def log_losses(
         self,
@@ -101,46 +96,3 @@ class TrainingLogger:
             rr.log("ppo/explained_variance", rr.Scalars(explained_variance))
         if learning_rate is not None:
             rr.log("ppo/learning_rate", rr.Scalars(learning_rate))
-
-    def log_actions(self, action: NDArray[np.float64]) -> None:
-        """Log policy action outputs.
-
-        Args:
-            action: [throttle, roll_rate, pitch_rate, yaw_rate]
-        """
-        rr.log("actions/throttle", rr.Scalars(action[0]))
-        rr.log("actions/roll_rate", rr.Scalars(action[1]))
-        rr.log("actions/pitch_rate", rr.Scalars(action[2]))
-        rr.log("actions/yaw_rate", rr.Scalars(action[3]))
-
-    def log_actions_clipped(self, action: NDArray[np.float64]) -> None:
-        """Log clipped action outputs.
-
-        Args:
-            action: [throttle, roll_rate, pitch_rate, yaw_rate] after clipping
-        """
-        rr.log("actions_clipped/throttle", rr.Scalars(action[0]))
-        rr.log("actions_clipped/roll_rate", rr.Scalars(action[1]))
-        rr.log("actions_clipped/pitch_rate", rr.Scalars(action[2]))
-        rr.log("actions_clipped/yaw_rate", rr.Scalars(action[3]))
-
-    def log_step_metrics(
-        self,
-        *,
-        distance: float | None = None,
-        speed: float | None = None,
-        reward: float | None = None,
-    ) -> None:
-        """Log per-step metrics.
-
-        Args:
-            distance: Distance to current waypoint
-            speed: Current speed
-            reward: Step reward
-        """
-        if distance is not None:
-            rr.log("step/distance", rr.Scalars(distance))
-        if speed is not None:
-            rr.log("step/speed", rr.Scalars(speed))
-        if reward is not None:
-            rr.log("step/reward", rr.Scalars(reward))

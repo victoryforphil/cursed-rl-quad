@@ -15,6 +15,7 @@ class RewardLoggerCallback(BaseCallback):
         self._episode_rewards: list[float] = []
         self._episode_lengths: list[int] = []
         self._waypoints_reached: list[int] = []
+        self._total_episodes = 0
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
@@ -25,16 +26,17 @@ class RewardLoggerCallback(BaseCallback):
                 # Track waypoints reached
                 wp_idx = info.get("current_waypoint_idx", 0)
                 self._waypoints_reached.append(wp_idx)
+                self._total_episodes += 1
 
-                if len(self._episode_rewards) % 10 == 0:
+                if self._total_episodes % 50 == 0:
                     mean_reward = np.mean(self._episode_rewards[-100:])
                     mean_length = np.mean(self._episode_lengths[-100:])
                     mean_waypoints = np.mean(self._waypoints_reached[-100:])
                     print(
-                        f"Episodes: {len(self._episode_rewards)}, "
-                        f"Mean reward: {mean_reward:.2f}, "
-                        f"Mean length: {mean_length:.0f}, "
-                        f"Mean waypoints: {mean_waypoints:.1f}/10"
+                        f"Episodes: {self._total_episodes}, "
+                        f"Mean reward (100): {mean_reward:.2f}, "
+                        f"Mean length (100): {mean_length:.0f}, "
+                        f"Mean waypoints (100): {mean_waypoints:.1f}/10"
                     )
 
         return True

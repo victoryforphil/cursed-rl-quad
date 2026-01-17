@@ -15,6 +15,7 @@ class TrainingConfig:
     seed: int = 42
     resume_from: str | None = None
     use_rerun: bool = False
+    device: str = "auto"
 
 
 @dataclass
@@ -134,7 +135,8 @@ class CallbackConfig:
     checkpoint_freq: int = 50_000
     eval_freq: int = 10_000
     n_eval_episodes: int = 5
-    log_3d_freq: int = 3
+    snapshot_freq_updates: int = 20
+    snapshot_max_steps: int = 500
     summary_update_freq: int = 10
 
 
@@ -176,6 +178,7 @@ class VisualizationConfig:
     eval_app_id: str = "simhops-eval"
     demo_app_id: str = "simhops-demo"
     spawn: bool = True
+    log_aggregated_metrics: bool = True
 
 
 @dataclass

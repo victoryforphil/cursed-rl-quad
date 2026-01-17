@@ -14,6 +14,8 @@ training:
   resume_from: null
   # Enable Rerun logging during training
   use_rerun: true
+  # Device for PyTorch (auto, cpu, cuda, cuda:0, etc.)
+  device: auto
 
 curriculum:
   # Enable staged curriculum training
@@ -198,8 +200,10 @@ callbacks:
   eval_freq: 10000
   # Number of eval episodes per evaluation
   n_eval_episodes: 5
-  # 3D log frequency (global steps)
-  log_3d_freq: 5
+  # Snapshot frequency (PPO updates, not steps)
+  snapshot_freq_updates: 20
+  # Cap steps in snapshot episode
+  snapshot_max_steps: 500
   # Write interim summary every N updates
   summary_update_freq: 100
 
@@ -246,3 +250,5 @@ visualization:
   demo_app_id: "simhops-demo"
   # Spawn Rerun viewer process
   spawn: true
+  # Enable aggregated metrics logging
+  log_aggregated_metrics: true

@@ -103,17 +103,16 @@ class RerunVisualizer:
                 rrb.Horizontal(
                     rrb.Spatial3DView(
                         origin="world",
-                        name="3D",
+                        name="Latest Policy",
                     ),
                     rrb.Vertical(
                         rrb.TimeSeriesView(
-                            origin="losses",
-                            name="Losses",
+                            origin="progress",
+                            name="Training Progress",
                         ),
                         rrb.TimeSeriesView(
-                            origin="training",
-                            contents=["training/episode_length"],
-                            name="Episode Length",
+                            origin="losses",
+                            name="Losses",
                         ),
                         rrb.TextDocumentView(
                             origin="session/config",
@@ -133,37 +132,12 @@ class RerunVisualizer:
     # Convenience methods that delegate to sub-loggers
     # =========================================================================
 
-    def log_drone_position(
-        self,
-        timestep: int,
-        position: NDArray[np.float64],
-        velocity: NDArray[np.float64] | None = None,
-        orientation: NDArray[np.float64] | None = None,
-        relative_waypoint: NDArray[np.float64] | None = None,
-        arm_length: float = 0.17,
-    ) -> None:
-        """Log drone position (convenience method with timestep).
-
-        Args:
-            timestep: Current timestep for time series
-            position: [x, y, z] position
-            velocity: [vx, vy, vz] velocity (optional)
-            orientation: [qw, qx, qy, qz] quaternion (optional)
-            relative_waypoint: Unused, kept for backward compatibility
-            arm_length: Quadcopter arm length
-        """
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("timestep", sequence=timestep)
-        self.env.log_drone(position, velocity, orientation, arm_length)
-
     def log_quadcopter(
         self,
         state: QuadcopterState,
         arm_length: float = 0.17,
     ) -> None:
-        """Log quadcopter from state object.
+        """Log quadcopter from state object (for evaluation/demo).
 
         Args:
             state: Quadcopter state from simulation
@@ -185,146 +159,14 @@ class RerunVisualizer:
         current_idx: int,
         radius: float = 0.5,
     ) -> None:
-        """Log waypoint positions."""
-        if not self._initialized:
-            self.init()
-
-        self.env.log_waypoints(waypoints, current_idx, radius)
-
-    def log_waypoints_training(
-        self,
-        timestep: int,
-        waypoints: list[NDArray[np.float64]],
-        current_idx: int,
-        radius: float = 0.5,
-    ) -> None:
-        """Log waypoints with timestep for training visualization."""
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("timestep", sequence=timestep)
-        self.env.log_waypoints(waypoints, current_idx, radius)
-
-    def log_training_metrics(
-        self,
-        timestep: int,
-        *,
-        episode_reward: float | None = None,
-        episode_length: int | None = None,
-        mean_reward: float | None = None,
-        policy_loss: float | None = None,
-        value_loss: float | None = None,
-        entropy_loss: float | None = None,
-        total_loss: float | None = None,
-        approx_kl: float | None = None,
-        clip_fraction: float | None = None,
-        explained_variance: float | None = None,
-        learning_rate: float | None = None,
-    ) -> None:
-        """Log training metrics (convenience method).
+        """Log waypoint positions (for evaluation/demo).
 
         Args:
-            timestep: Current training timestep
-            episode_reward: Reward for completed episode
-            episode_length: Length of completed episode
-            mean_reward: Rolling mean reward
-            policy_loss: Policy gradient loss
-            value_loss: Value function loss
-            entropy_loss: Entropy bonus loss
-            total_loss: Combined loss
-            approx_kl: Approximate KL divergence
-            clip_fraction: Fraction of clipped updates
-            explained_variance: Explained variance
-            learning_rate: Current learning rate
+            waypoints: List of waypoint positions
+            current_idx: Current waypoint index
+            radius: Waypoint visualization radius
         """
         if not self._initialized:
             self.init()
 
-        rr.set_time("timestep", sequence=timestep)
-
-        # Episode metrics
-        if episode_reward is not None and episode_length is not None:
-            self.training.log_episode(
-                episode_reward=episode_reward,
-                episode_length=episode_length,
-                mean_reward=mean_reward,
-            )
-        elif episode_reward is not None:
-            rr.log("training/episode_reward", rr.Scalars(episode_reward))
-
-        # Losses
-        if any(
-            x is not None for x in [policy_loss, value_loss, entropy_loss, total_loss]
-        ):
-            self.training.log_losses(
-                policy_loss=policy_loss,
-                value_loss=value_loss,
-                entropy_loss=entropy_loss,
-                total_loss=total_loss,
-            )
-
-        # PPO diagnostics
-        if any(
-            x is not None
-            for x in [approx_kl, clip_fraction, explained_variance, learning_rate]
-        ):
-            self.training.log_ppo_diagnostics(
-                approx_kl=approx_kl,
-                clip_fraction=clip_fraction,
-                explained_variance=explained_variance,
-                learning_rate=learning_rate,
-            )
-
-    def log_actions(
-        self,
-        timestep: int,
-        action: NDArray[np.float64],
-    ) -> None:
-        """Log policy action outputs."""
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("timestep", sequence=timestep)
-        self.training.log_actions(action)
-
-    def log_clipped_actions(
-        self,
-        timestep: int,
-        action: NDArray[np.float64],
-    ) -> None:
-        """Log clipped action outputs."""
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("timestep", sequence=timestep)
-        self.training.log_actions_clipped(action)
-
-    def log_metrics(
-        self,
-        step: int,
-        reward: float,
-        distance: float,
-        speed: float,
-        waypoint_idx: int,
-    ) -> None:
-        """Log scalar metrics (legacy method)."""
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("step", sequence=step)
-        rr.log("metrics/reward", rr.Scalars(reward))
-        rr.log("metrics/distance", rr.Scalars(distance))
-        rr.log("metrics/speed", rr.Scalars(speed))
-        rr.log("metrics/waypoint_idx", rr.Scalars(waypoint_idx))
-
-    def log_action(
-        self,
-        step: int,
-        action: NDArray[np.float64],
-    ) -> None:
-        """Log action values (legacy method)."""
-        if not self._initialized:
-            self.init()
-
-        rr.set_time("step", sequence=step)
-        self.training.log_actions(action)
+        self.env.log_waypoints(waypoints, current_idx, radius)
