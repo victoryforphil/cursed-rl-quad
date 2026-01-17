@@ -14,9 +14,196 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecNormalize
 
+import rerun as rr
 from simhops.config import Config
+from simhops.logging import log, log_run_start, setup_run_logging
 from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.viz.rerun_viz import RerunVisualizer
+
+
+def eval_to_rrd(
+    model_path: str,
+    output_rrd: Path,
+    episodes: int = 1,
+    recording_name: str | None = None,
+    spawn_viewer: bool = True,
+    run_id: str | None = None,
+) -> dict:
+    """Run evaluation and save to .rrd file, optionally spawning viewer.
+
+    Args:
+        model_path: Path to saved model directory
+        output_rrd: Path to save .rrd file
+        episodes: Number of evaluation episodes to run
+        recording_name: Optional name for the recording
+        spawn_viewer: Whether to spawn Rerun viewer (default: True)
+
+    Returns:
+        Dictionary with episode statistics
+    """
+    cfg = Config.schema()
+    eval_cfg = cfg.evaluation
+    model_dir = Path(model_path)
+
+    # Find model file
+    model_file = None
+    for candidate in [
+        model_dir / "ppo_quadcopter.zip",
+        model_dir / "ppo_quadcopter",
+        model_dir / "best_model.zip",
+        model_dir,
+    ]:
+        if candidate.exists() or Path(str(candidate) + ".zip").exists():
+            model_file = candidate
+            break
+
+    if model_file is None:
+        raise FileNotFoundError(f"Could not find model in {model_path}")
+
+    # Load model
+    model = PPO.load(str(model_file))
+
+    # Create environment
+    env_cfg = eval_cfg.env
+    env = QuadcopterEnv(
+        render_mode=None,
+        add_sensor_noise=env_cfg.add_sensor_noise,
+        disable_tilt_termination=env_cfg.disable_tilt_termination,
+        include_position=env_cfg.include_position,
+        waypoint_noise=env_cfg.waypoint_noise,
+        waypoint_yaw_random=env_cfg.waypoint_yaw_random,
+    )
+
+    # Load normalization stats if available
+    vec_normalize_path = model_dir / "vec_normalize.pkl"
+    obs_rms = None
+    if vec_normalize_path.exists():
+        import pickle
+
+        with open(vec_normalize_path, "rb") as f:
+            vec_normalize = pickle.load(f)
+            try:
+                if isinstance(vec_normalize, VecNormalize):
+                    obs_rms = vec_normalize.obs_rms
+                elif hasattr(vec_normalize, "mean") and hasattr(vec_normalize, "var"):
+                    obs_rms = vec_normalize
+            except (AttributeError, RecursionError):
+                pass
+
+    # Initialize Rerun for saving (and optionally spawning viewer)
+    if recording_name is None:
+        recording_name = f"eval:{model_dir.name}"
+
+    rr.init(cfg.visualization.eval_app_id, spawn=spawn_viewer)
+    rr.save(str(output_rrd))
+
+    session_markdown = "\n".join(
+        [
+            "# SimHops Checkpoint Evaluation",
+            f"- model_path: {model_path}",
+            f"- episodes: {episodes}",
+            "",
+            "## Environment",
+            f"- waypoint_noise: {env_cfg.waypoint_noise}",
+            f"- add_sensor_noise: {env_cfg.add_sensor_noise}",
+        ]
+    )
+
+    viz = RerunVisualizer(
+        app_id=cfg.visualization.eval_app_id,
+        spawn=spawn_viewer,
+        recording_name=recording_name,
+        session_markdown=session_markdown,
+    )
+    viz.init()
+
+    # Run evaluation episodes
+    episode_stats = []
+    for episode_idx in range(1, episodes + 1):
+        obs, info = env.reset()
+        viz.reset()
+
+        viz.log_waypoints(
+            info["waypoints"],
+            info["current_waypoint_idx"],
+            radius=env.waypoint_radius,
+        )
+
+        done = False
+        total_reward = 0.0
+        step = 0
+
+        while not done:
+            if (
+                obs_rms is not None
+                and hasattr(obs_rms, "mean")
+                and hasattr(obs_rms, "var")
+            ):
+                obs_mean = getattr(obs_rms, "mean")
+                obs_var = getattr(obs_rms, "var")
+                obs_normalized = (obs - obs_mean) / np.sqrt(obs_var + 1e-8)
+                obs_normalized = np.clip(obs_normalized, -10.0, 10.0)
+            else:
+                obs_normalized = obs
+
+            action, _ = model.predict(obs_normalized, deterministic=True)
+
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            total_reward += float(reward)
+            step += 1
+
+            if env._quad is not None:
+                state = env._quad.get_state()
+                current_waypoint_idx = info["current_waypoint_idx"]
+
+                rr.set_time("step", sequence=step)
+                rr.set_time("episode", sequence=episode_idx)
+
+                # Log drone state
+                viz.env.log_drone(
+                    position=state.position,
+                    velocity=state.velocity,
+                    orientation=state.orientation,
+                )
+
+                # Update waypoints with progress
+                viz.env.log_waypoints(
+                    env._waypoints,
+                    current_waypoint_idx,
+                    radius=env.waypoint_radius,
+                )
+
+        # Store episode stats
+        success = info.get("success", False)
+        crash = info.get("crash", None)
+        completion_steps = info.get("completion_steps", step) if success else None
+
+        episode_stats.append(
+            {
+                "episode": episode_idx,
+                "reward": total_reward,
+                "length": step,
+                "waypoints_reached": info.get("current_waypoint_idx", 0),
+                "success": bool(success),
+                "crash_type": crash,
+                "completion_time_s": completion_steps * env.dt
+                if completion_steps is not None
+                else None,
+            }
+        )
+
+    env.close()
+
+    # Return aggregated stats
+    return {
+        "episodes": episode_stats,
+        "mean_reward": float(np.mean([ep["reward"] for ep in episode_stats])),
+        "mean_length": float(np.mean([ep["length"] for ep in episode_stats])),
+        "success_rate": float(
+            np.mean([ep["success"] for ep in episode_stats])
+        ),
+    }
 
 
 def evaluate(

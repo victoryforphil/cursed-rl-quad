@@ -15,11 +15,14 @@ from simhops.config import Config
 from simhops.config.schema import CurriculumStageConfig, EnvConfig
 from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.train.callbacks import (
+    EvalCheckpointCallback,
     ExperimentSnapshotCallback,
     MetricsLoggerCallback,
     RewardLoggerCallback,
-    SnapshotRerunCallback,
+    TrainingMetricsCallback,
 )
+from simhops.logging import log, log_run_start, setup_run_logging
+from simhops.logging import run_id as current_run_id
 from simhops.train.metrics import MetricsLogger
 from simhops.viz.rerun_viz import RerunVisualizer
 
@@ -80,6 +83,11 @@ def train() -> None:
     run_path.mkdir(parents=True, exist_ok=True)
     Config.dump_yaml(run_path / "config.yaml")
 
+    setup_run_logging(run_path.name)
+    log_run_start(run_path.name)
+    log(f"Run directory: {run_path}")
+    log(f"Log file: data/{run_path.name}/run.log")
+
     stages = cfg.curriculum.stages if cfg.curriculum.enabled else []
     if not stages:
         stages = [None]
@@ -100,10 +108,10 @@ def train() -> None:
             stage.total_timesteps if stage is not None else cfg.training.total_timesteps
         )
 
-        print(
+        log(
             f"Starting stage {stage_index}/{len(stages)}: {stage_label} ({stage_timesteps} timesteps)"
         )
-        print(
+        log(
             "Env: noise={:.2f}, yaw_random={}, sensor_noise={}, random_start={}, max_waypoints={}, action_scale={}, start_pos_random={}, start_pos_noise={}".format(
                 stage_env_cfg.waypoint_noise,
                 stage_env_cfg.waypoint_yaw_random,
@@ -115,6 +123,8 @@ def train() -> None:
                 stage_env_cfg.start_position_noise,
             )
         )
+        if stage_index == 1 and current_run_id() is not None:
+            log(f"Rerun TextLog entity: logs (run {current_run_id()})")
 
         env = make_vec_env(
             lambda: QuadcopterEnv(
@@ -194,6 +204,21 @@ def train() -> None:
             deterministic=True,
         )
 
+        # Create eval recordings directory and callback
+        eval_rrd_dir = run_path / "eval_recordings"
+        eval_rrd_dir.mkdir(parents=True, exist_ok=True)
+        eval_checkpoint_callback = None
+        if cfg.callbacks.eval_checkpoint_enabled:
+            eval_checkpoint_callback = EvalCheckpointCallback(
+                checkpoint_dir=checkpoint_path,
+                eval_rrd_dir=eval_rrd_dir,
+                checkpoint_freq=cfg.callbacks.checkpoint_freq,
+                n_eval_episodes=cfg.callbacks.eval_checkpoint_episodes,
+                stage_index=stage_index,
+                stage_name=stage_label,
+                verbose=1,
+            )
+
         callbacks: list[BaseCallback] = [
             checkpoint_callback,
             eval_callback,
@@ -201,8 +226,11 @@ def train() -> None:
             experiment_snapshot,
         ]
 
+        if eval_checkpoint_callback is not None:
+            callbacks.append(eval_checkpoint_callback)
+
         if cfg.training.use_rerun:
-            print("Initializing Rerun visualizer for training metrics...")
+            log("Initializing Rerun visualizer for training metrics...")
             session_markdown = "\n".join(
                 [
                     "# SimHops Training Session",
@@ -236,10 +264,8 @@ def train() -> None:
                 session_markdown=session_markdown,
             )
             viz.init()
-            rerun_callback = SnapshotRerunCallback(
+            rerun_callback = TrainingMetricsCallback(
                 viz,
-                snapshot_freq_updates=cfg.callbacks.snapshot_freq_updates,
-                snapshot_max_steps=cfg.callbacks.snapshot_max_steps,
             )
             callbacks.append(rerun_callback)
         else:
@@ -247,10 +273,10 @@ def train() -> None:
 
         if model is None:
             if cfg.training.resume_from:
-                print(f"Resuming from {cfg.training.resume_from}")
+                log(f"Resuming from {cfg.training.resume_from}")
                 model = PPO.load(cfg.training.resume_from, env=env)
             else:
-                print("Creating new PPO model...")
+                log("Creating new PPO model...")
                 model = PPO(
                     "MlpPolicy",
                     env,
@@ -277,7 +303,7 @@ def train() -> None:
         else:
             model.set_env(env)
 
-        print(f"Starting training for {stage_timesteps} timesteps...")
+        log(f"Starting training for {stage_timesteps} timesteps...")
 
         try:
             model.learn(
@@ -287,7 +313,7 @@ def train() -> None:
                 reset_num_timesteps=False,
             )
         except KeyboardInterrupt:
-            print("\nTraining interrupted by user.")
+            log("Training interrupted by user.", level="warning")
             break
         finally:
             env.close()
@@ -296,7 +322,7 @@ def train() -> None:
     metrics_callback.finalize()
 
     if model is None:
-        print("Training did not start; no model created.")
+        log("Training did not start; no model created.", level="warning")
         return
 
     final_model_path = run_path / "final_model"
@@ -306,7 +332,7 @@ def train() -> None:
     if isinstance(vec_env, VecNormalize):
         vec_env.save(str(env_save_path))
 
-    print(f"Model saved to {final_model_path}")
+    log(f"Model saved to {final_model_path}")
 
 
 def main() -> None:

@@ -19,7 +19,7 @@ training:
 
 curriculum:
   # Enable staged curriculum training
-  enabled: true
+  enabled: false
   stages:
     - name: "stage_0_hover"
       total_timesteps: 150000
@@ -206,6 +206,10 @@ callbacks:
   snapshot_max_steps: 500
   # Write interim summary every N updates
   summary_update_freq: 100
+  # Enable checkpoint evaluation to .rrd files
+  eval_checkpoint_enabled: true
+  # Number of episodes per checkpoint evaluation
+  eval_checkpoint_episodes: 1
 
 evaluation:
   # Run in realtime (sleep between steps)

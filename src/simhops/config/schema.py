@@ -138,6 +138,8 @@ class CallbackConfig:
     snapshot_freq_updates: int = 20
     snapshot_max_steps: int = 500
     summary_update_freq: int = 10
+    eval_checkpoint_enabled: bool = True
+    eval_checkpoint_episodes: int = 1
 
 
 @dataclass
