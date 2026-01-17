@@ -5,9 +5,9 @@ training:
   # Directory to store models, logs, and run artifacts
   output_dir: "models"
   # Total number of training timesteps
-  total_timesteps: 15000000
+  total_timesteps: 25000000
   # Number of parallel training environments
-  n_envs: 10
+  n_envs: 20
   # Global random seed
   seed: 42
   # Optional checkpoint path to resume training
@@ -59,11 +59,11 @@ ppo:
   # PPO optimizer learning rate
   learning_rate: 0.0005
   # PPO minibatch size
-  batch_size: 256
+  batch_size: 512
   # Rollout steps per environment before update
-  n_steps: 2048
+  n_steps: 4096
   # PPO epochs per update
-  n_epochs: 10
+  n_epochs: 15
   # Discount factor
   gamma: 0.99
   # GAE lambda
@@ -78,8 +78,8 @@ ppo:
   max_grad_norm: 0.5
   # Policy/value network architecture
   net_arch:
-    pi: [256, 256]
-    vf: [256, 256]
+    pi: [512, 512]
+    vf: [512, 512]
 
 vecnormalize:
   # Normalize observations
@@ -95,9 +95,9 @@ vecnormalize:
 
 env:
   # Radius required to count a waypoint as reached
-  waypoint_radius: 1.0
+  waypoint_radius: 0.25
   # Waypoint randomization magnitude (+/- meters)
-  waypoint_noise: 1.0
+  waypoint_noise: 3
   # Randomize waypoint yaw rotation each reset
   waypoint_yaw_random: true
   # Max episode steps before truncation
@@ -105,13 +105,13 @@ env:
   # Arena size in meters
   arena_size: 32.0
   # Maximum allowed altitude in meters
-  max_altitude: 12.0
+  max_altitude: 30.0
   # Maximum tilt angle (radians) before termination
-  max_tilt_angle: 1.4
+  max_tilt_angle: 1.6
   # Disable tilt-based termination
   disable_tilt_termination: false
   # Max distance used to normalize waypoint vector
-  goal_max_distance: 16.0
+  goal_max_distance: 10.0
   # Include global position in observation
   include_position: false
   # Randomize starting waypoint index
@@ -121,13 +121,13 @@ env:
   # Max number of waypoints to complete (null = all)
   max_waypoints: null
   # Action magnitude scale (1.0 = full range)
-  action_scale: 0.7
+  action_scale: 0.8
   # Randomize initial position around [0, 0, 1]
   random_start_position: true
   # Max +/- meters per axis when randomizing start position
-  start_position_noise: 0.2
+  start_position_noise: 0.4
   # Speed normalization denominator (m/s)
-  speed_normalization: 5.0
+  speed_normalization: 8.0
   # Bounds margin beyond arena limits (meters)
   bounds_margin: 5.0
   # Minimum z threshold before out-of-bounds termination
@@ -137,15 +137,15 @@ env:
 
 reward:
   # Reward multiplier for progress toward waypoint
-  progress_multiplier: 3.0
+  progress_multiplier: 4.0
   # Per-step time penalty
-  time_penalty: 0.02
+  time_penalty: 0.2
   # Bonus for reaching a waypoint
   waypoint_bonus: 50.0
   # Bonus for completing the full path
-  path_complete_bonus: 100.0
+  path_complete_bonus: 150.0
   # Divisor for completion time bonus (steps/ divisor)
-  completion_time_divisor: 100.0
+  completion_time_divisor: 50.0
   # Bonus when within 3x waypoint radius
   close_proximity_3x_bonus: 0.1
   # Radius multiplier for close proximity bonus
@@ -157,7 +157,7 @@ reward:
   # Penalty for collision with ground or geometry
   collision_penalty: 10.0
   # Penalty for exceeding tilt limit
-  tilt_penalty: 12.0
+  tilt_penalty: 7.0
   # Penalty for going out of bounds
   out_of_bounds_penalty: 5.0
 
@@ -167,7 +167,7 @@ quadcopter:
   # Arm length from center to motor (m)
   arm_length: 0.17
   # Max thrust / weight ratio
-  thrust_to_weight: 2.0
+  thrust_to_weight: 2.5
   # Inertia tensor (Ixx, Iyy, Izz)
   inertia: [0.0023, 0.0023, 0.004]
   # Linear drag coefficient
@@ -177,9 +177,9 @@ quadcopter:
 
 sensor:
   # Accelerometer noise std (m/s^2)
-  accel_noise_std: 0.1
+  accel_noise_std: 0.025
   # Accelerometer bias random walk std (m/s^2)
-  accel_bias_std: 0.02
+  accel_bias_std: 0.001
   # Accelerometer bias time constant (s)
   accel_bias_time_constant: 100.0
   # Gyro noise std (rad/s)
@@ -195,9 +195,9 @@ sensor:
 
 callbacks:
   # Checkpoint save frequency (global steps)
-  checkpoint_freq: 50000
+  checkpoint_freq: 25000
   # Evaluation frequency (global steps)
-  eval_freq: 10000
+  eval_freq: 20000
   # Number of eval episodes per evaluation
   n_eval_episodes: 5
   # Snapshot frequency (PPO updates, not steps)
@@ -220,7 +220,7 @@ evaluation:
     # Waypoint noise for evaluation
     waypoint_noise: 0.0
     # Randomize waypoint yaw rotation each reset
-    waypoint_yaw_random: false
+    waypoint_yaw_random: true
     # Include global position in observation
     include_position: false
     # Apply sensor noise during evaluation

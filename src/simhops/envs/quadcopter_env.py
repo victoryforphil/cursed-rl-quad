@@ -213,6 +213,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         self._episode_speed_steps: int = 0
         self._episode_max_tilt: float = 0.0
         self._time_to_first_wp: int | None = None
+        self._has_been_seeded: bool = False
 
         # Observation space: sensor readings + waypoint info
         base_obs_dim = SensorReadings.observation_size() + 6
@@ -346,7 +347,18 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         options: dict[str, Any] | None = None,
     ) -> tuple[NDArray[np.float64], dict[str, Any]]:
         """Reset the environment."""
-        super().reset(seed=seed)
+        # Only seed on first reset to allow RNG to advance between episodes
+        # This ensures waypoint_yaw_random produces different yaws each reset
+        # If waypoint_yaw_random is disabled, we can reseed each reset for determinism
+        if not self._has_been_seeded:
+            super().reset(seed=seed)
+            self._has_been_seeded = True
+        elif self.waypoint_yaw_random:
+            # Don't pass seed to allow RNG to continue its sequence for randomization
+            super().reset(seed=None)
+        else:
+            # If randomization is disabled, we can reseed for determinism
+            super().reset(seed=seed)
 
         # Initialize physics if needed
         if self._model is None:

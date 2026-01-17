@@ -361,27 +361,22 @@ def evaluate(
                 state = env._quad.get_state()
                 current_waypoint_idx = info["current_waypoint_idx"]
 
-                wp_idx = min(current_waypoint_idx, env.num_waypoints - 1)
+                rr.set_time("step", sequence=step)
+                rr.set_time("episode", sequence=episode_idx)
 
-                viz.log_drone_position(
-                    step,
+                # Log drone state
+                viz.env.log_drone(
                     position=state.position,
                     velocity=state.velocity,
                     orientation=state.orientation,
                 )
 
-                viz.log_waypoints_training(
-                    step,
+                # Update waypoints with progress
+                viz.env.log_waypoints(
                     env._waypoints,
                     current_waypoint_idx,
+                    radius=env.waypoint_radius,
                 )
-
-                viz.log_training_metrics(
-                    step,
-                    episode_reward=float(reward),
-                )
-
-                viz.log_actions(step, action)
 
             if eval_cfg.realtime:
                 time.sleep(env.dt * eval_cfg.slow_motion)
@@ -491,16 +486,21 @@ def demo_random() -> None:
 
         if env._quad is not None:
             state = env._quad.get_state()
-            viz.log_drone_position(
-                step,
+            rr.set_time("step", sequence=step)
+
+            # Log drone state
+            viz.env.log_drone(
                 position=state.position,
                 velocity=state.velocity,
                 orientation=state.orientation,
             )
-            viz.log_waypoints_training(
-                step, env._waypoints, info["current_waypoint_idx"]
+
+            # Update waypoints with progress
+            viz.env.log_waypoints(
+                env._waypoints,
+                info["current_waypoint_idx"],
+                radius=env.waypoint_radius,
             )
-            viz.log_actions(step, action)
 
         if step % 50 == 0 and env._quad is not None:
             state = env._quad.get_state()
