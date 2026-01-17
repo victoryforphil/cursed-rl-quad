@@ -21,6 +21,66 @@ from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.viz.rerun_viz import RerunVisualizer
 
 
+def _log_training_metrics(run_dir: Path) -> None:
+    """Load and log training metrics from run directory to Rerun.
+    
+    Args:
+        run_dir: Path to run directory containing episodes.csv and updates.csv
+    """
+    import pandas as pd
+    
+    # Load episodes.csv for episode-level metrics
+    episodes_csv = run_dir / "episodes.csv"
+    if episodes_csv.exists():
+        try:
+            df_episodes = pd.read_csv(episodes_csv)
+            
+            # Log episode metrics on 'episode' timeline
+            for _, row in df_episodes.iterrows():
+                episode_num = int(row["episode"])
+                rr.set_time("episode", sequence=episode_num)
+                
+                if "reward" in row:
+                    rr.log("training/episode/reward", rr.Scalar(float(row["reward"])))
+                if "length" in row:
+                    rr.log("training/episode/length", rr.Scalar(int(row["length"])))
+                if "waypoints_reached" in row:
+                    rr.log("training/episode/waypoints", rr.Scalar(int(row["waypoints_reached"])))
+                if "success" in row:
+                    rr.log("training/episode/success", rr.Scalar(1.0 if row["success"] else 0.0))
+        except Exception as e:
+            print(f"Warning: Could not load episodes.csv: {e}")
+    
+    # Load updates.csv for PPO update metrics
+    updates_csv = run_dir / "updates.csv"
+    if updates_csv.exists():
+        try:
+            df_updates = pd.read_csv(updates_csv)
+            
+            # Log update metrics on 'ppo_update' timeline
+            for _, row in df_updates.iterrows():
+                update_num = int(row["update"])
+                rr.set_time("ppo_update", sequence=update_num)
+                
+                # Loss metrics
+                if "policy_loss" in row and pd.notna(row["policy_loss"]):
+                    rr.log("training/losses/policy", rr.Scalar(float(row["policy_loss"])))
+                if "value_loss" in row and pd.notna(row["value_loss"]):
+                    rr.log("training/losses/value", rr.Scalar(float(row["value_loss"])))
+                if "entropy_loss" in row and pd.notna(row["entropy_loss"]):
+                    rr.log("training/losses/entropy", rr.Scalar(float(row["entropy_loss"])))
+                
+                # PPO diagnostics
+                if "approx_kl" in row and pd.notna(row["approx_kl"]):
+                    rr.log("training/ppo/approx_kl", rr.Scalar(float(row["approx_kl"])))
+                if "clip_fraction" in row and pd.notna(row["clip_fraction"]):
+                    rr.log("training/ppo/clip_fraction", rr.Scalar(float(row["clip_fraction"])))
+                if "explained_variance" in row and pd.notna(row["explained_variance"]):
+                    rr.log("training/ppo/explained_variance", rr.Scalar(float(row["explained_variance"])))
+        except Exception as e:
+            print(f"Warning: Could not load updates.csv: {e}")
+
+
 def eval_to_rrd(
     model_path: str,
     output_rrd: Path,
@@ -28,6 +88,7 @@ def eval_to_rrd(
     recording_name: str | None = None,
     spawn_viewer: bool = True,
     run_id: str | None = None,
+    run_dir: Path | None = None,
 ) -> dict:
     """Run evaluation and save to .rrd file, optionally spawning viewer.
 
@@ -37,6 +98,8 @@ def eval_to_rrd(
         episodes: Number of evaluation episodes to run
         recording_name: Optional name for the recording
         spawn_viewer: Whether to spawn Rerun viewer (default: True)
+        run_id: Optional run ID for logging
+        run_dir: Optional run directory to load training metrics from
 
     Returns:
         Dictionary with episode statistics
@@ -116,6 +179,10 @@ def eval_to_rrd(
         session_markdown=session_markdown,
     )
     viz.init()
+
+    # Load and log training metrics if run_dir is provided
+    if run_dir is not None:
+        _log_training_metrics(run_dir)
 
     # Run evaluation episodes
     episode_stats = []

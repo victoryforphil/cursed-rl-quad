@@ -84,16 +84,6 @@ class TrainingMetricsCallback(BaseCallback):
                 mean_reward = float(np.mean(self._episode_rewards))
                 mean_length = float(np.mean(self._episode_lengths))
                 success_rate = float(np.mean(self._episode_successes))
-                rr.log(
-                    "logs/training",
-                    rr.TextLog(
-                        f"Episodes: {self._total_episodes}, "
-                        f"Mean reward (100): {mean_reward:.2f}, "
-                        f"Mean length (100): {mean_length:.0f}, "
-                        f"Success rate: {success_rate:.2%}",
-                        level=rr.TextLogLevel.INFO,
-                    ),
-                )
                 from simhops.logging import log
 
                 log(

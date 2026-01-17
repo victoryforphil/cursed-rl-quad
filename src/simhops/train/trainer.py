@@ -19,12 +19,10 @@ from simhops.train.callbacks import (
     ExperimentSnapshotCallback,
     MetricsLoggerCallback,
     RewardLoggerCallback,
-    TrainingMetricsCallback,
 )
 from simhops.logging import log, log_run_start, setup_run_logging
 from simhops.logging import run_id as current_run_id
 from simhops.train.metrics import MetricsLogger
-from simhops.viz.rerun_viz import RerunVisualizer
 
 
 def _apply_stage_env(cfg: EnvConfig, stage: CurriculumStageConfig | None) -> EnvConfig:
@@ -212,6 +210,7 @@ def train() -> None:
             eval_checkpoint_callback = EvalCheckpointCallback(
                 checkpoint_dir=checkpoint_path,
                 eval_rrd_dir=eval_rrd_dir,
+                run_dir=run_path,
                 checkpoint_freq=cfg.callbacks.checkpoint_freq,
                 n_eval_episodes=cfg.callbacks.eval_checkpoint_episodes,
                 stage_index=stage_index,
@@ -224,52 +223,11 @@ def train() -> None:
             eval_callback,
             metrics_callback,
             experiment_snapshot,
+            RewardLoggerCallback(),
         ]
 
         if eval_checkpoint_callback is not None:
             callbacks.append(eval_checkpoint_callback)
-
-        if cfg.training.use_rerun:
-            log("Initializing Rerun visualizer for training metrics...")
-            session_markdown = "\n".join(
-                [
-                    "# SimHops Training Session",
-                    f"- stage: {stage_label} ({stage_index}/{len(stages)})",
-                    f"- timesteps: {stage_timesteps}",
-                    f"- config: {Config.path() or 'cfg_default.yaml'}",
-                    "",
-                    "## Environment",
-                    f"- waypoint_noise: {stage_env_cfg.waypoint_noise}",
-                    f"- waypoint_yaw_random: {stage_env_cfg.waypoint_yaw_random}",
-                    f"- waypoint_radius: {stage_env_cfg.waypoint_radius}",
-                    f"- max_waypoints: {stage_env_cfg.max_waypoints}",
-                    f"- random_start_waypoint: {stage_env_cfg.random_start_waypoint}",
-                    f"- random_start_position: {stage_env_cfg.random_start_position}",
-                    f"- start_position_noise: {stage_env_cfg.start_position_noise}",
-                    f"- action_scale: {stage_env_cfg.action_scale}",
-                    f"- max_episode_steps: {stage_env_cfg.max_episode_steps}",
-                    "",
-                    "## PPO",
-                    f"- learning_rate: {cfg.ppo.learning_rate}",
-                    f"- n_steps: {cfg.ppo.n_steps}",
-                    f"- batch_size: {cfg.ppo.batch_size}",
-                    f"- n_epochs: {cfg.ppo.n_epochs}",
-                ]
-            )
-            recording_name = f"{cfg.visualization.training_app_id}:{stage_label}"
-            viz = RerunVisualizer(
-                app_id=cfg.visualization.training_app_id,
-                spawn=cfg.visualization.spawn,
-                recording_name=recording_name,
-                session_markdown=session_markdown,
-            )
-            viz.init()
-            rerun_callback = TrainingMetricsCallback(
-                viz,
-            )
-            callbacks.append(rerun_callback)
-        else:
-            callbacks.append(RewardLoggerCallback())
 
         if model is None:
             if cfg.training.resume_from:
