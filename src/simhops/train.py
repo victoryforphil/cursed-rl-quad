@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import (
     BaseCallback,
@@ -15,6 +17,7 @@ from stable_baselines3.common.callbacks import (
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
+from simhops.config import Config
 from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.viz.rerun_viz import RerunVisualizer
 
@@ -179,148 +182,133 @@ class RewardLoggerCallback(BaseCallback):
         return True
 
 
-def train(
-    output_dir: str = "models",
-    total_timesteps: int = 1_000_000,
-    n_envs: int = 8,
-    seed: int = 42,
-    learning_rate: float = 3e-4,
-    batch_size: int = 256,
-    n_epochs: int = 10,
-    gamma: float = 0.99,
-    gae_lambda: float = 0.95,
-    clip_range: float = 0.2,
-    ent_coef: float = 0.01,
-    waypoint_noise: float = 1.0,
-    resume_from: str | None = None,
-    use_rerun: bool = False,
-) -> None:
-    """Train PPO agent on 10-waypoint path with randomization.
-
-    Args:
-        output_dir: Directory to save models and logs
-        total_timesteps: Total training timesteps
-        n_envs: Number of parallel environments
-        seed: Random seed
-        learning_rate: Learning rate
-        batch_size: Minibatch size
-        n_epochs: Number of epochs per update
-        gamma: Discount factor
-        gae_lambda: GAE lambda
-        clip_range: PPO clip range
-        ent_coef: Entropy coefficient
-        waypoint_noise: +/- meters of waypoint randomization per reset
-        resume_from: Path to checkpoint to resume from
-        use_rerun: Enable Rerun visualization for training metrics
-    """
-    output_path = Path(output_dir)
+def train() -> None:
+    """Train PPO agent on 10-waypoint path with randomization."""
+    cfg = Config.schema()
+    output_path = Path(cfg.training.output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print(f"Creating {n_envs} parallel environments...")
-    print(f"Training on 10-waypoint path with +/-{waypoint_noise}m randomization")
+    timestamp = datetime.now()
+    run_path = output_path / f"run_{timestamp:%Y%m%d_%H%M%S}"
+    run_path.mkdir(parents=True, exist_ok=True)
+    Config.dump_yaml(run_path / "config.yaml")
+
+    print(f"Creating {cfg.training.n_envs} parallel environments...")
+    print(
+        f"Training on 10-waypoint path with +/-{cfg.env.waypoint_noise}m randomization"
+    )
 
     # Create vectorized environment
     env = make_vec_env(
         lambda: QuadcopterEnv(
             render_mode=None,
-            add_sensor_noise=True,
-            include_position=False,
-            waypoint_noise=waypoint_noise,
+            add_sensor_noise=cfg.env.add_sensor_noise,
+            include_position=cfg.env.include_position,
+            waypoint_noise=cfg.env.waypoint_noise,
         ),
-        n_envs=n_envs,
-        seed=seed,
+        n_envs=cfg.training.n_envs,
+        seed=cfg.training.seed,
         vec_env_cls=SubprocVecEnv,
     )
 
     # Normalize rewards only (observations are already normalized in env)
     env = VecNormalize(
         env,
-        norm_obs=False,
-        norm_reward=True,
-        clip_obs=10.0,
-        clip_reward=10.0,
-        gamma=gamma,
+        norm_obs=cfg.vecnormalize.norm_obs,
+        norm_reward=cfg.vecnormalize.norm_reward,
+        clip_obs=cfg.vecnormalize.clip_obs,
+        clip_reward=cfg.vecnormalize.clip_reward,
+        gamma=cfg.ppo.gamma,
     )
 
     # Create evaluation environment (no noise for consistent eval)
+    eval_env_cfg = cfg.evaluation.env
     eval_env = make_vec_env(
         lambda: QuadcopterEnv(
             render_mode=None,
-            add_sensor_noise=True,
-            include_position=False,
-            waypoint_noise=0.0,  # No randomization for evaluation
+            add_sensor_noise=eval_env_cfg.add_sensor_noise,
+            include_position=eval_env_cfg.include_position,
+            waypoint_noise=eval_env_cfg.waypoint_noise,
+            disable_tilt_termination=eval_env_cfg.disable_tilt_termination,
         ),
         n_envs=1,
-        seed=seed + 1000,
+        seed=cfg.training.seed + 1000,
     )
     eval_env = VecNormalize(
         eval_env,
-        norm_obs=False,
-        norm_reward=False,
-        clip_obs=10.0,
+        norm_obs=cfg.vecnormalize.norm_obs,
+        norm_reward=cfg.vecnormalize.eval_norm_reward,
+        clip_obs=cfg.vecnormalize.clip_obs,
         training=False,
     )
 
     # Callbacks
     checkpoint_callback = CheckpointCallback(
-        save_freq=50_000 // n_envs,
-        save_path=str(output_path / "checkpoints"),
+        save_freq=cfg.callbacks.checkpoint_freq // cfg.training.n_envs,
+        save_path=str(run_path / "checkpoints"),
         name_prefix="ppo_quadcopter",
         save_vecnormalize=True,
     )
 
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path=str(output_path / "best_model"),
-        log_path=str(output_path / "eval_logs"),
-        eval_freq=10_000 // n_envs,
-        n_eval_episodes=5,
+        best_model_save_path=str(run_path / "best_model"),
+        log_path=str(run_path / "eval_logs"),
+        eval_freq=cfg.callbacks.eval_freq // cfg.training.n_envs,
+        n_eval_episodes=cfg.callbacks.n_eval_episodes,
         deterministic=True,
     )
 
     callbacks: list[BaseCallback] = [checkpoint_callback, eval_callback]
 
-    if use_rerun:
+    if cfg.training.use_rerun:
         print("Initializing Rerun visualizer for training metrics...")
-        viz = RerunVisualizer(app_id="simhops-training", spawn=True)
+        viz = RerunVisualizer(
+            app_id=cfg.visualization.training_app_id, spawn=cfg.visualization.spawn
+        )
         viz.init()
-        rerun_callback = RerunTrainingCallback(viz)
+        rerun_callback = RerunTrainingCallback(
+            viz, log_3d_freq=cfg.callbacks.log_3d_freq
+        )
         callbacks.append(rerun_callback)
     else:
         callbacks.append(RewardLoggerCallback())
 
     # Create or load model
-    if resume_from:
-        print(f"Resuming from {resume_from}")
-        model = PPO.load(resume_from, env=env)
+    if cfg.training.resume_from:
+        print(f"Resuming from {cfg.training.resume_from}")
+        model = PPO.load(cfg.training.resume_from, env=env)
     else:
         print("Creating new PPO model...")
         model = PPO(
             "MlpPolicy",
             env,
-            learning_rate=learning_rate,
-            n_steps=2048,
-            batch_size=batch_size,
-            n_epochs=n_epochs,
-            gamma=gamma,
-            gae_lambda=gae_lambda,
-            clip_range=clip_range,
-            ent_coef=ent_coef,
-            vf_coef=0.5,
-            max_grad_norm=0.5,
+            learning_rate=cfg.ppo.learning_rate,
+            n_steps=cfg.ppo.n_steps,
+            batch_size=cfg.ppo.batch_size,
+            n_epochs=cfg.ppo.n_epochs,
+            gamma=cfg.ppo.gamma,
+            gae_lambda=cfg.ppo.gae_lambda,
+            clip_range=cfg.ppo.clip_range,
+            ent_coef=cfg.ppo.ent_coef,
+            vf_coef=cfg.ppo.vf_coef,
+            max_grad_norm=cfg.ppo.max_grad_norm,
             verbose=1,
-            tensorboard_log=str(output_path / "tensorboard"),
-            seed=seed,
+            tensorboard_log=str(run_path / "tensorboard"),
+            seed=cfg.training.seed,
             policy_kwargs={
-                "net_arch": {"pi": [256, 256], "vf": [256, 256]},
+                "net_arch": {
+                    "pi": cfg.ppo.net_arch.pi,
+                    "vf": cfg.ppo.net_arch.vf,
+                },
             },
         )
 
-    print(f"Starting training for {total_timesteps} timesteps...")
+    print(f"Starting training for {cfg.training.total_timesteps} timesteps...")
 
     try:
         model.learn(
-            total_timesteps=total_timesteps,
+            total_timesteps=cfg.training.total_timesteps,
             callback=callbacks,
             progress_bar=True,
         )
@@ -328,7 +316,7 @@ def train(
         print("\nTraining interrupted by user.")
 
     # Save final model
-    final_model_path = output_path / "final_model"
+    final_model_path = run_path / "final_model"
     model.save(str(final_model_path / "ppo_quadcopter"))
     env.save(str(final_model_path / "vec_normalize.pkl"))
 
@@ -342,45 +330,15 @@ def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Train quadcopter RL agent")
     parser.add_argument(
-        "--output-dir", type=str, default="models", help="Output directory"
-    )
-    parser.add_argument(
-        "--timesteps", type=int, default=1_000_000, help="Total training timesteps"
-    )
-    parser.add_argument(
-        "--n-envs", type=int, default=8, help="Number of parallel environments"
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
-    parser.add_argument("--batch-size", type=int, default=256, help="Batch size")
-    parser.add_argument(
-        "--waypoint-noise",
-        type=float,
-        default=1.0,
-        help="Waypoint randomization in meters (+/-)",
-    )
-    parser.add_argument(
-        "--resume", type=str, default=None, help="Path to checkpoint to resume"
-    )
-    parser.add_argument(
-        "--rerun",
-        action="store_true",
-        help="Enable Rerun visualization for training metrics",
+        "--config",
+        type=str,
+        default="cfg_default.yaml",
+        help="Path to YAML config file",
     )
 
     args = parser.parse_args()
-
-    train(
-        output_dir=args.output_dir,
-        total_timesteps=args.timesteps,
-        n_envs=args.n_envs,
-        seed=args.seed,
-        learning_rate=args.lr,
-        batch_size=args.batch_size,
-        waypoint_noise=args.waypoint_noise,
-        resume_from=args.resume,
-        use_rerun=args.rerun,
-    )
+    Config.load(args.config)
+    train()
 
 
 if __name__ == "__main__":

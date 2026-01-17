@@ -11,6 +11,7 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
+from simhops.config import Config
 from simhops.core.quadcopter import (
     Quadcopter,
     QuadcopterParams,
@@ -70,41 +71,102 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
     def __init__(
         self,
         render_mode: str | None = None,
-        waypoint_radius: float = 1.0,  # 1m radius to pass through
-        waypoint_noise: float = 1.0,  # +/- meters randomization per reset
-        max_episode_steps: int = 5000,  # Enough time for full path
-        arena_size: float = 25.0,  # Large arena for expanded path
-        max_altitude: float = 10.0,
-        max_tilt_angle: float = 1.4,  # ~80 degrees - allow aggressive flight
-        disable_tilt_termination: bool = False,  # For evaluation - don't crash on tilt
-        goal_max_distance: float = 12.0,  # Max distance for normalization (larger for expanded path)
-        include_position: bool = True,  # Include global position in observations
-        random_start_waypoint: bool = False,  # Start from random waypoint (curriculum)
+        waypoint_radius: float | None = None,  # 1m radius to pass through
+        waypoint_noise: float | None = None,  # +/- meters randomization per reset
+        max_episode_steps: int | None = None,  # Enough time for full path
+        arena_size: float | None = None,  # Large arena for expanded path
+        max_altitude: float | None = None,
+        max_tilt_angle: float | None = None,  # ~80 degrees - allow aggressive flight
+        disable_tilt_termination: bool
+        | None = None,  # For evaluation - don't crash on tilt
+        goal_max_distance: float
+        | None = None,  # Max distance for normalization (larger for expanded path)
+        include_position: bool | None = None,  # Include global position in observations
+        random_start_waypoint: bool
+        | None = None,  # Start from random waypoint (curriculum)
         quad_params: QuadcopterParams | None = None,
         sensor_params: SensorNoiseParams | None = None,
-        add_sensor_noise: bool = True,
+        add_sensor_noise: bool | None = None,
     ) -> None:
         super().__init__()
 
+        cfg = Config.schema()
+        env_cfg = cfg.env
+
         self.render_mode = render_mode
         self.num_waypoints = len(self.FIXED_WAYPOINTS)  # Always 10
-        self.waypoint_radius = waypoint_radius
-        self.waypoint_noise = waypoint_noise
-        self.max_episode_steps = max_episode_steps
-        self.arena_size = arena_size
-        self.max_altitude = max_altitude
-        self.max_tilt_angle = max_tilt_angle
-        self.disable_tilt_termination = disable_tilt_termination
-        self.goal_max_distance = goal_max_distance
-        self.include_position = include_position
-        self.random_start_waypoint = random_start_waypoint
-        self.add_sensor_noise = add_sensor_noise
+        self.waypoint_radius = (
+            waypoint_radius if waypoint_radius is not None else env_cfg.waypoint_radius
+        )
+        self.waypoint_noise = (
+            waypoint_noise if waypoint_noise is not None else env_cfg.waypoint_noise
+        )
+        self.max_episode_steps = (
+            max_episode_steps
+            if max_episode_steps is not None
+            else env_cfg.max_episode_steps
+        )
+        self.arena_size = arena_size if arena_size is not None else env_cfg.arena_size
+        self.max_altitude = (
+            max_altitude if max_altitude is not None else env_cfg.max_altitude
+        )
+        self.max_tilt_angle = (
+            max_tilt_angle if max_tilt_angle is not None else env_cfg.max_tilt_angle
+        )
+        self.disable_tilt_termination = (
+            disable_tilt_termination
+            if disable_tilt_termination is not None
+            else env_cfg.disable_tilt_termination
+        )
+        self.goal_max_distance = (
+            goal_max_distance
+            if goal_max_distance is not None
+            else env_cfg.goal_max_distance
+        )
+        self.include_position = (
+            include_position
+            if include_position is not None
+            else env_cfg.include_position
+        )
+        self.random_start_waypoint = (
+            random_start_waypoint
+            if random_start_waypoint is not None
+            else env_cfg.random_start_waypoint
+        )
+        self.add_sensor_noise = (
+            add_sensor_noise
+            if add_sensor_noise is not None
+            else env_cfg.add_sensor_noise
+        )
+        self._speed_normalization = env_cfg.speed_normalization
+        self._bounds_margin = env_cfg.bounds_margin
+        self._ground_threshold = env_cfg.ground_threshold
+        self._reward_cfg = cfg.reward
 
-        self._quad_params = quad_params or QuadcopterParams()
-        self._sensor_params = sensor_params or SensorNoiseParams()
+        quad_defaults = cfg.quadcopter
+
+        sensor_defaults = cfg.sensor
+        self._quad_params = quad_params or QuadcopterParams(
+            mass=quad_defaults.mass,
+            arm_length=quad_defaults.arm_length,
+            thrust_to_weight=quad_defaults.thrust_to_weight,
+            inertia=quad_defaults.inertia,
+            drag_coeff=quad_defaults.drag_coeff,
+            motor_time_constant=quad_defaults.motor_time_constant,
+        )
+        self._sensor_params = sensor_params or SensorNoiseParams(
+            accel_noise_std=sensor_defaults.accel_noise_std,
+            accel_bias_std=sensor_defaults.accel_bias_std,
+            accel_bias_time_constant=sensor_defaults.accel_bias_time_constant,
+            gyro_noise_std=sensor_defaults.gyro_noise_std,
+            gyro_bias_std=sensor_defaults.gyro_bias_std,
+            gyro_bias_time_constant=sensor_defaults.gyro_bias_time_constant,
+            position_noise_std=sensor_defaults.position_noise_std,
+            velocity_noise_std=sensor_defaults.velocity_noise_std,
+        )
 
         # Physics timestep (100 Hz)
-        self.dt = 0.01
+        self.dt = env_cfg.timestep
 
         # MuJoCo setup
         self._model: mujoco.MjModel | None = None
@@ -195,9 +257,9 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         # Normalized distance: 1.0 = far (at goal_max_distance), 0.0 = at waypoint
         distance_normalized = min(distance / self.goal_max_distance, 1.0)
 
-        # Speed (normalized by a reasonable max speed, e.g., 5 m/s)
+        # Speed (normalized by a reasonable max speed)
         speed = float(np.linalg.norm(sensor_readings.velocity))
-        speed_normalized = min(speed / 5.0, 1.0)
+        speed_normalized = min(speed / self._speed_normalization, 1.0)
 
         # Normalized waypoint progress (0 = first waypoint, 1 = last waypoint)
         progress = min(self._current_waypoint_idx, self.num_waypoints - 1) / max(
@@ -347,33 +409,37 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
                 # All waypoints completed! Big time bonus
                 terminated = True
                 # Bonus inversely proportional to time taken
-                time_bonus = max(0, (self.max_episode_steps - self._episode_step) / 100)
-                reward += 100.0 + time_bonus
+                time_bonus = max(
+                    0,
+                    (self.max_episode_steps - self._episode_step)
+                    / self._reward_cfg.completion_time_divisor,
+                )
+                reward += self._reward_cfg.path_complete_bonus + time_bonus
                 info["success"] = True
                 info["completion_steps"] = self._episode_step
 
         # Check for crash (ground collision or excessive tilt)
         if self._quad.check_collision():
             terminated = True
-            reward -= 10.0
+            reward -= self._reward_cfg.collision_penalty
             info["crash"] = "collision"
 
         tilt = self._quad.get_tilt_angle()
         if tilt > self.max_tilt_angle and not self.disable_tilt_termination:
             terminated = True
-            reward -= 10.0
+            reward -= self._reward_cfg.tilt_penalty
             info["crash"] = "excessive_tilt"
 
         # Check bounds (generous margins beyond waypoint area)
         pos = state.position
         if (
-            abs(pos[0]) > self.arena_size / 2 + 5.0  # 5m beyond arena edge
-            or abs(pos[1]) > self.arena_size / 2 + 5.0
-            or pos[2] > self.max_altitude + 5.0  # 5m above max altitude
-            or pos[2] < 0.05  # Very close to ground
+            abs(pos[0]) > self.arena_size / 2 + self._bounds_margin
+            or abs(pos[1]) > self.arena_size / 2 + self._bounds_margin
+            or pos[2] > self.max_altitude + self._bounds_margin
+            or pos[2] < self._ground_threshold
         ):
             terminated = True
-            reward -= 5.0
+            reward -= self._reward_cfg.out_of_bounds_penalty
             info["crash"] = "out_of_bounds"
 
         # Check time limit
@@ -402,21 +468,24 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         # This is the primary reward signal
         if self._prev_distance is not None:
             progress = self._prev_distance - distance
-            reward += progress * 5.0  # Reward for getting closer
+            reward += progress * self._reward_cfg.progress_multiplier
         self._prev_distance = distance
 
         # Small time penalty to encourage speed (not too harsh)
-        reward -= 0.01
+        reward -= self._reward_cfg.time_penalty
 
         # Big bonus for reaching waypoint
         if waypoint_reached:
-            reward += 50.0
+            reward += self._reward_cfg.waypoint_bonus
 
         # Graduated bonus for being close
-        if distance < self.waypoint_radius * 3:  # Within 3m
-            reward += 0.1
-            if distance < self.waypoint_radius * 1.5:  # Within 1.5m
-                reward += 0.2
+        if distance < self.waypoint_radius * self._reward_cfg.close_proximity_3x_radius:
+            reward += self._reward_cfg.close_proximity_3x_bonus
+            if (
+                distance
+                < self.waypoint_radius * self._reward_cfg.close_proximity_1_5x_radius
+            ):
+                reward += self._reward_cfg.close_proximity_1_5x_bonus
 
         return reward
 

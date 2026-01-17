@@ -13,16 +13,12 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecNormalize
 
+from simhops.config import Config
 from simhops.envs.quadcopter_env import QuadcopterEnv
 from simhops.viz.rerun_viz import RerunVisualizer
 
 
-def evaluate(
-    model_path: str,
-    realtime: bool = True,
-    slow_motion: float = 1.0,
-    disable_tilt_termination: bool = True,  # Don't crash on tilt during eval
-) -> None:
+def evaluate(model_path: str) -> None:
     """Evaluate trained model with Rerun visualization.
 
     Runs a single episode on the fixed 10-waypoint path.
@@ -34,6 +30,8 @@ def evaluate(
         slow_motion: Slow motion factor (1.0 = realtime)
         disable_tilt_termination: If True, don't terminate on excessive tilt
     """
+    cfg = Config.schema()
+    eval_cfg = cfg.evaluation
     model_dir = Path(model_path)
 
     # Find model file
@@ -55,15 +53,16 @@ def evaluate(
     model = PPO.load(str(model_file))
 
     # Create environment (no waypoint noise for consistent evaluation)
+    env_cfg = eval_cfg.env
     env = QuadcopterEnv(
         render_mode=None,
-        add_sensor_noise=True,
-        disable_tilt_termination=disable_tilt_termination,
-        include_position=False,
-        waypoint_noise=0.0,
+        add_sensor_noise=env_cfg.add_sensor_noise,
+        disable_tilt_termination=env_cfg.disable_tilt_termination,
+        include_position=env_cfg.include_position,
+        waypoint_noise=env_cfg.waypoint_noise,
     )
     print(f"Environment: {env.num_waypoints} waypoints (no randomization)")
-    if disable_tilt_termination:
+    if env_cfg.disable_tilt_termination:
         print("Tilt termination disabled for evaluation")
 
     # Load normalization stats if available
@@ -80,11 +79,13 @@ def evaluate(
                     obs_rms = vec_normalize.obs_rms
                 elif hasattr(vec_normalize, "mean") and hasattr(vec_normalize, "var"):
                     obs_rms = vec_normalize
-            except (AttributeError, RecursionError) as e:
-                print(f"Warning: Could not load obs_rms: {e}")
+            except (AttributeError, RecursionError) as error:
+                print(f"Warning: Could not load obs_rms: {error}")
 
     # Initialize Rerun visualizer
-    viz = RerunVisualizer(app_id="simhops-eval", spawn=True)
+    viz = RerunVisualizer(
+        app_id=cfg.visualization.eval_app_id, spawn=cfg.visualization.spawn
+    )
     viz.init()
 
     # Run single episode
@@ -106,7 +107,9 @@ def evaluate(
     while not done:
         # Normalize observation if we have stats
         if obs_rms is not None and hasattr(obs_rms, "mean") and hasattr(obs_rms, "var"):
-            obs_normalized = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
+            obs_mean = getattr(obs_rms, "mean")
+            obs_var = getattr(obs_rms, "var")
+            obs_normalized = (obs - obs_mean) / np.sqrt(obs_var + 1e-8)
             obs_normalized = np.clip(obs_normalized, -10.0, 10.0)
         else:
             obs_normalized = obs
@@ -153,8 +156,8 @@ def evaluate(
             viz.log_actions(step, action)
 
         # Real-time visualization
-        if realtime:
-            time.sleep(env.dt * slow_motion)
+        if eval_cfg.realtime:
+            time.sleep(env.dt * eval_cfg.slow_motion)
 
         # Print progress every 100 steps
         if step % 100 == 0:
@@ -185,17 +188,24 @@ def evaluate(
     env.close()
 
 
-def demo_random(max_steps: int = 500) -> None:
-    """Run demo with random actions for testing.
-
-    Args:
-        max_steps: Maximum steps per episode
-    """
+def demo_random() -> None:
+    """Run demo with random actions for testing."""
+    cfg = Config.schema()
+    demo_cfg = cfg.demo
+    env_cfg = demo_cfg.env
     print("Running demo with random actions...")
 
-    env = QuadcopterEnv(render_mode=None, add_sensor_noise=True)
+    env = QuadcopterEnv(
+        render_mode=None,
+        add_sensor_noise=env_cfg.add_sensor_noise,
+        disable_tilt_termination=env_cfg.disable_tilt_termination,
+        include_position=env_cfg.include_position,
+        waypoint_noise=env_cfg.waypoint_noise,
+    )
 
-    viz = RerunVisualizer(app_id="simhops-demo", spawn=True)
+    viz = RerunVisualizer(
+        app_id=cfg.visualization.demo_app_id, spawn=cfg.visualization.spawn
+    )
     viz.init()
 
     obs, info = env.reset()
@@ -206,7 +216,7 @@ def demo_random(max_steps: int = 500) -> None:
     total_reward = 0.0
     step = 0
 
-    while not done and step < max_steps:
+    while not done and step < demo_cfg.max_steps:
         # Random action with slight upward bias
         action = np.random.uniform(-0.3, 0.3, size=4).astype(np.float64)
         action[0] = np.random.uniform(-0.1, 0.3)
@@ -233,7 +243,7 @@ def demo_random(max_steps: int = 500) -> None:
             state = env._quad.get_state()
             print(f"  Step {step}: pos={state.position}, dist={info['distance']:.2f}m")
 
-        time.sleep(0.01)
+        time.sleep(demo_cfg.sleep_time)
 
     print(f"\nDone: steps={step}, reward={total_reward:.1f}")
     env.close()
@@ -242,42 +252,29 @@ def demo_random(max_steps: int = 500) -> None:
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Evaluate quadcopter agent")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="cfg_default.yaml",
+        help="Path to YAML config file",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Evaluate subcommand
     eval_parser = subparsers.add_parser("eval", help="Evaluate trained model")
     eval_parser.add_argument("model_path", type=str, help="Path to model directory")
-    eval_parser.add_argument(
-        "--slow", type=float, default=1.0, help="Slow motion factor"
-    )
-    eval_parser.add_argument(
-        "--fast",
-        action="store_true",
-        help="Run as fast as possible (no realtime delay)",
-    )
-    eval_parser.add_argument(
-        "--strict-tilt",
-        action="store_true",
-        help="Enable tilt termination (default: disabled for eval)",
-    )
 
     # Demo subcommand
-    demo_parser = subparsers.add_parser("demo", help="Run random action demo")
-    demo_parser.add_argument(
-        "--steps", type=int, default=500, help="Max steps per episode"
-    )
+    subparsers.add_parser("demo", help="Run random action demo")
 
     args = parser.parse_args()
 
+    Config.load(args.config)
+
     if args.command == "eval":
-        evaluate(
-            model_path=args.model_path,
-            realtime=not args.fast,
-            slow_motion=args.slow,
-            disable_tilt_termination=not args.strict_tilt,
-        )
+        evaluate(model_path=args.model_path)
     elif args.command == "demo":
-        demo_random(max_steps=args.steps)
+        demo_random()
 
 
 if __name__ == "__main__":

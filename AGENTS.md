@@ -84,3 +84,18 @@ uv run python -m simhops.evaluate demo
 - Model checkpoints are NOT committed - save important models externally
 - Use `--waypoint-noise 0.0` for deterministic evaluation
 - The 3D visualization estimates drone position from relative waypoint observations
+
+## Logging Plan (Agent-Focused)
+
+The logging plan is documented in `docs/plans/metrics_logging_plan.md`.
+
+Key goals for agents:
+- Structured, readable logs (CSV + JSON) for fast iteration
+- Episode summaries, PPO update metrics, and evaluation results
+- Run-to-run comparison via a global `experiments.csv` index
+
+Proposed run layout (inside `models/`):
+- `run_YYYYMMDD_HHMMSS/` per experiment
+- `config.json`, `training_summary.json`, `episodes.csv`, `updates.csv`, `eval_results.csv`
+
+This plan is intended to support automated tuning of hyperparameters, reward shaping, and policy architecture.

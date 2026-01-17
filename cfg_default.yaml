@@ -1,0 +1,194 @@
+# SimHops default configuration
+# Override with: uv run python -m simhops.train --config path/to/config.yaml
+
+training:
+  # Directory to store models, logs, and run artifacts
+  output_dir: "models"
+  # Total number of training timesteps
+  total_timesteps: 1000000
+  # Number of parallel training environments
+  n_envs: 8
+  # Global random seed
+  seed: 42
+  # Optional checkpoint path to resume training
+  resume_from: null
+  # Enable Rerun logging during training
+  use_rerun: false
+
+ppo:
+  # PPO optimizer learning rate
+  learning_rate: 0.0003
+  # PPO minibatch size
+  batch_size: 256
+  # Rollout steps per environment before update
+  n_steps: 2048
+  # PPO epochs per update
+  n_epochs: 10
+  # Discount factor
+  gamma: 0.99
+  # GAE lambda
+  gae_lambda: 0.95
+  # PPO clip range
+  clip_range: 0.2
+  # Entropy coefficient
+  ent_coef: 0.01
+  # Value function coefficient
+  vf_coef: 0.5
+  # Gradient clipping max norm
+  max_grad_norm: 0.5
+  # Policy/value network architecture
+  net_arch:
+    pi: [256, 256]
+    vf: [256, 256]
+
+vecnormalize:
+  # Normalize observations
+  norm_obs: false
+  # Normalize rewards during training
+  norm_reward: true
+  # Observation clipping range
+  clip_obs: 10.0
+  # Reward clipping range
+  clip_reward: 10.0
+  # Evaluation reward normalization (false keeps raw rewards)
+  eval_norm_reward: false
+
+env:
+  # Radius required to count a waypoint as reached
+  waypoint_radius: 1.0
+  # Waypoint randomization magnitude (+/- meters)
+  waypoint_noise: 1.0
+  # Max episode steps before truncation
+  max_episode_steps: 5000
+  # Arena size in meters
+  arena_size: 25.0
+  # Maximum allowed altitude in meters
+  max_altitude: 10.0
+  # Maximum tilt angle (radians) before termination
+  max_tilt_angle: 1.4
+  # Disable tilt-based termination
+  disable_tilt_termination: false
+  # Max distance used to normalize waypoint vector
+  goal_max_distance: 12.0
+  # Include global position in observation
+  include_position: false
+  # Randomize starting waypoint index
+  random_start_waypoint: false
+  # Apply sensor noise during observation
+  add_sensor_noise: true
+  # Speed normalization denominator (m/s)
+  speed_normalization: 5.0
+  # Bounds margin beyond arena limits (meters)
+  bounds_margin: 5.0
+  # Minimum z threshold before out-of-bounds termination
+  ground_threshold: 0.05
+  # Physics timestep (seconds)
+  timestep: 0.01
+
+reward:
+  # Reward multiplier for progress toward waypoint
+  progress_multiplier: 5.0
+  # Per-step time penalty
+  time_penalty: 0.01
+  # Bonus for reaching a waypoint
+  waypoint_bonus: 50.0
+  # Bonus for completing the full path
+  path_complete_bonus: 100.0
+  # Divisor for completion time bonus (steps/ divisor)
+  completion_time_divisor: 100.0
+  # Bonus when within 3x waypoint radius
+  close_proximity_3x_bonus: 0.1
+  # Radius multiplier for close proximity bonus
+  close_proximity_3x_radius: 3.0
+  # Bonus when within 1.5x waypoint radius
+  close_proximity_1_5x_bonus: 0.2
+  # Radius multiplier for tighter proximity bonus
+  close_proximity_1_5x_radius: 1.5
+  # Penalty for collision with ground or geometry
+  collision_penalty: 10.0
+  # Penalty for exceeding tilt limit
+  tilt_penalty: 10.0
+  # Penalty for going out of bounds
+  out_of_bounds_penalty: 5.0
+
+quadcopter:
+  # Quadcopter mass (kg)
+  mass: 0.5
+  # Arm length from center to motor (m)
+  arm_length: 0.17
+  # Max thrust / weight ratio
+  thrust_to_weight: 2.0
+  # Inertia tensor (Ixx, Iyy, Izz)
+  inertia: [0.0023, 0.0023, 0.004]
+  # Linear drag coefficient
+  drag_coeff: 0.01
+  # Motor response time constant (s)
+  motor_time_constant: 0.02
+
+sensor:
+  # Accelerometer noise std (m/s^2)
+  accel_noise_std: 0.1
+  # Accelerometer bias random walk std (m/s^2)
+  accel_bias_std: 0.02
+  # Accelerometer bias time constant (s)
+  accel_bias_time_constant: 100.0
+  # Gyro noise std (rad/s)
+  gyro_noise_std: 0.01
+  # Gyro bias random walk std (rad/s)
+  gyro_bias_std: 0.001
+  # Gyro bias time constant (s)
+  gyro_bias_time_constant: 100.0
+  # Position noise std (m)
+  position_noise_std: 0.01
+  # Velocity noise std (m/s)
+  velocity_noise_std: 0.05
+
+callbacks:
+  # Checkpoint save frequency (global steps)
+  checkpoint_freq: 50000
+  # Evaluation frequency (global steps)
+  eval_freq: 10000
+  # Number of eval episodes per evaluation
+  n_eval_episodes: 5
+  # 3D log frequency (global steps)
+  log_3d_freq: 3
+
+evaluation:
+  # Run in realtime (sleep between steps)
+  realtime: true
+  # Slow motion multiplier (1.0 = realtime)
+  slow_motion: 1.0
+  env:
+    # Waypoint noise for evaluation
+    waypoint_noise: 0.0
+    # Include global position in observation
+    include_position: false
+    # Apply sensor noise during evaluation
+    add_sensor_noise: true
+    # Disable tilt termination during evaluation
+    disable_tilt_termination: true
+
+demo:
+  # Maximum steps for random action demo
+  max_steps: 500
+  # Sleep time between demo steps (seconds)
+  sleep_time: 0.01
+  env:
+    # Waypoint noise for demo
+    waypoint_noise: 1.0
+    # Include global position in observation
+    include_position: false
+    # Apply sensor noise during demo
+    add_sensor_noise: true
+    # Disable tilt termination during demo
+    disable_tilt_termination: false
+
+visualization:
+  # Rerun app ID for training
+  training_app_id: "simhops-training"
+  # Rerun app ID for evaluation
+  eval_app_id: "simhops-eval"
+  # Rerun app ID for demo
+  demo_app_id: "simhops-demo"
+  # Spawn Rerun viewer process
+  spawn: true
