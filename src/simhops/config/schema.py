@@ -26,6 +26,9 @@ class CurriculumStageConfig:
     random_start_waypoint: bool | None = None
     max_waypoints: int | None = None
     max_episode_steps: int | None = None
+    action_scale: float | None = None
+    random_start_position: bool | None = None
+    start_position_noise: float | None = None
 
 
 @dataclass
@@ -78,6 +81,9 @@ class EnvConfig:
     random_start_waypoint: bool = False
     add_sensor_noise: bool = True
     max_waypoints: int | None = None
+    action_scale: float = 1.0
+    random_start_position: bool = False
+    start_position_noise: float = 0.0
     speed_normalization: float = 5.0
     bounds_margin: float = 5.0
     ground_threshold: float = 0.05
@@ -128,6 +134,7 @@ class CallbackConfig:
     eval_freq: int = 10_000
     n_eval_episodes: int = 5
     log_3d_freq: int = 3
+    summary_update_freq: int = 10
 
 
 @dataclass

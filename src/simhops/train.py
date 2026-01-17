@@ -108,6 +108,9 @@ class MetricsLogger:
                 "add_sensor_noise": cfg.env.add_sensor_noise,
                 "random_start_waypoint": cfg.env.random_start_waypoint,
                 "max_waypoints": cfg.env.max_waypoints,
+                "action_scale": cfg.env.action_scale,
+                "random_start_position": cfg.env.random_start_position,
+                "start_position_noise": cfg.env.start_position_noise,
             },
             "network": {
                 "policy": "MlpPolicy",
@@ -157,6 +160,16 @@ class MetricsLogger:
         self._update_writer.writerow(row)
         self._updates_file.flush()
 
+    def write_interim_summary(self, total_timesteps: int, total_episodes: int) -> None:
+        summary = self._build_summary(total_timesteps, total_episodes)
+        self._summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        self._append_experiment(self._build_experiments_row(summary, total_timesteps))
+
+    def write_checkpoint_summary(self, total_timesteps: int) -> None:
+        summary = self._build_summary(total_timesteps, len(self._episodes))
+        self._summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        self._append_experiment(self._build_experiments_row(summary, total_timesteps))
+
     def finalize(self, total_timesteps: int, total_episodes: int) -> None:
         if not self._episodes_file.closed:
             self._episodes_file.close()
@@ -165,7 +178,11 @@ class MetricsLogger:
 
         summary = self._build_summary(total_timesteps, total_episodes)
         self._summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        self._append_experiment(self._build_experiments_row(summary, total_timesteps))
 
+    def _build_experiments_row(
+        self, summary: dict[str, object], total_timesteps: int
+    ) -> dict[str, float | int | str | None]:
         performance = summary.get("performance", {})
         if not isinstance(performance, dict):
             performance = {}
@@ -174,11 +191,29 @@ class MetricsLogger:
             success_metrics = {}
 
         timestamp = summary.get("timestamp")
-        success_rate = success_metrics.get("success_rate")
-        mean_reward = performance.get("mean_reward_last_100")
-        best_reward = performance.get("best_reward")
+        if not isinstance(timestamp, str):
+            timestamp = None
 
-        experiments_row = {
+        success_rate_value = success_metrics.get("success_rate")
+        success_rate = (
+            float(success_rate_value)
+            if isinstance(success_rate_value, (int, float))
+            else None
+        )
+        mean_reward_value = performance.get("mean_reward_last_100")
+        mean_reward = (
+            float(mean_reward_value)
+            if isinstance(mean_reward_value, (int, float))
+            else None
+        )
+        best_reward_value = performance.get("best_reward")
+        best_reward = (
+            float(best_reward_value)
+            if isinstance(best_reward_value, (int, float))
+            else None
+        )
+
+        return {
             "run_id": self._run_id,
             "timestamp": timestamp,
             "total_timesteps": total_timesteps,
@@ -187,7 +222,6 @@ class MetricsLogger:
             "best_reward": best_reward,
             "notes": "",
         }
-        self._append_experiment(experiments_row)
 
     def _append_experiment(self, row: dict[str, float | int | str | None]) -> None:
         file_exists = self._experiments_path.exists()
@@ -321,9 +355,15 @@ class MetricsLogger:
 class MetricsLoggerCallback(BaseCallback):
     """Callback that writes agent-friendly CSV/JSON logs."""
 
-    def __init__(self, metrics_logger: MetricsLogger, verbose: int = 0) -> None:
+    def __init__(
+        self,
+        metrics_logger: MetricsLogger,
+        summary_update_freq: int,
+        verbose: int = 0,
+    ) -> None:
         super().__init__(verbose)
         self._metrics_logger = metrics_logger
+        self._summary_update_freq = max(1, summary_update_freq)
         self._episode_rewards: list[float] = []
         self._episode_count = 0
         self._update_count = 0
@@ -432,6 +472,10 @@ class MetricsLoggerCallback(BaseCallback):
             "mean_episode_reward": mean_reward,
         }
         self._metrics_logger.log_update(row)
+        if self._update_count % self._summary_update_freq == 0:
+            self._metrics_logger.write_interim_summary(
+                self.num_timesteps, self._episode_count
+            )
 
     def _on_training_end(self) -> None:
         self.finalize()
@@ -570,6 +614,26 @@ class RerunTrainingCallback(BaseCallback):
             )
 
 
+class ExperimentSnapshotCallback(BaseCallback):
+    """Append experiment snapshots on checkpoint cadence."""
+
+    def __init__(
+        self, metrics_logger: MetricsLogger, snapshot_freq: int, verbose: int = 0
+    ) -> None:
+        super().__init__(verbose)
+        self._metrics_logger = metrics_logger
+        self._snapshot_freq = max(1, snapshot_freq)
+
+    def _on_step(self) -> bool:
+        if self.n_calls == 0:
+            return True
+        if self.n_calls % self._snapshot_freq != 0:
+            return True
+
+        self._metrics_logger.write_checkpoint_summary(int(self.num_timesteps))
+        return True
+
+
 class RewardLoggerCallback(BaseCallback):
     """Callback for logging episode rewards (console only, no Rerun)."""
 
@@ -631,6 +695,15 @@ def _apply_stage_env(cfg: EnvConfig, stage: CurriculumStageConfig | None) -> Env
         max_waypoints=stage.max_waypoints
         if stage.max_waypoints is not None
         else env_cfg.max_waypoints,
+        action_scale=stage.action_scale
+        if stage.action_scale is not None
+        else env_cfg.action_scale,
+        random_start_position=stage.random_start_position
+        if stage.random_start_position is not None
+        else env_cfg.random_start_position,
+        start_position_noise=stage.start_position_noise
+        if stage.start_position_noise is not None
+        else env_cfg.start_position_noise,
         speed_normalization=env_cfg.speed_normalization,
         bounds_margin=env_cfg.bounds_margin,
         ground_threshold=env_cfg.ground_threshold,
@@ -654,7 +727,10 @@ def train() -> None:
         stages = [None]
 
     metrics_logger = MetricsLogger(run_path)
-    metrics_callback = MetricsLoggerCallback(metrics_logger)
+    metrics_callback = MetricsLoggerCallback(
+        metrics_logger,
+        summary_update_freq=cfg.callbacks.summary_update_freq,
+    )
 
     model: PPO | None = None
 
@@ -669,11 +745,14 @@ def train() -> None:
             f"Starting stage {stage_index}/{len(stages)}: {stage_label} ({stage_timesteps} timesteps)"
         )
         print(
-            "Env: noise={:.2f}, sensor_noise={}, random_start={}, max_waypoints={}".format(
+            "Env: noise={:.2f}, sensor_noise={}, random_start={}, max_waypoints={}, action_scale={}, start_pos_random={}, start_pos_noise={}".format(
                 stage_env_cfg.waypoint_noise,
                 stage_env_cfg.add_sensor_noise,
                 stage_env_cfg.random_start_waypoint,
                 stage_env_cfg.max_waypoints,
+                stage_env_cfg.action_scale,
+                stage_env_cfg.random_start_position,
+                stage_env_cfg.start_position_noise,
             )
         )
 
@@ -686,6 +765,9 @@ def train() -> None:
                 random_start_waypoint=stage_env_cfg.random_start_waypoint,
                 max_waypoints=stage_env_cfg.max_waypoints,
                 max_episode_steps=stage_env_cfg.max_episode_steps,
+                action_scale=stage_env_cfg.action_scale,
+                random_start_position=stage_env_cfg.random_start_position,
+                start_position_noise=stage_env_cfg.start_position_noise,
             ),
             n_envs=cfg.training.n_envs,
             seed=cfg.training.seed,
@@ -712,6 +794,9 @@ def train() -> None:
                 random_start_waypoint=stage_env_cfg.random_start_waypoint,
                 max_waypoints=stage_env_cfg.max_waypoints,
                 max_episode_steps=stage_env_cfg.max_episode_steps,
+                action_scale=stage_env_cfg.action_scale,
+                random_start_position=stage_env_cfg.random_start_position,
+                start_position_noise=stage_env_cfg.start_position_noise,
             ),
             n_envs=1,
             seed=cfg.training.seed + 1000,
@@ -724,11 +809,18 @@ def train() -> None:
             training=False,
         )
 
+        checkpoint_path = run_path / "checkpoints" / f"stage_{stage_index}"
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
         checkpoint_callback = CheckpointCallback(
             save_freq=cfg.callbacks.checkpoint_freq // cfg.training.n_envs,
-            save_path=str(run_path / "checkpoints"),
+            save_path=str(checkpoint_path),
             name_prefix=f"ppo_quadcopter_stage_{stage_index}",
             save_vecnormalize=True,
+        )
+
+        experiment_snapshot = ExperimentSnapshotCallback(
+            metrics_logger,
+            snapshot_freq=cfg.callbacks.checkpoint_freq // cfg.training.n_envs,
         )
 
         eval_callback = EvalCallback(
@@ -744,6 +836,7 @@ def train() -> None:
             checkpoint_callback,
             eval_callback,
             metrics_callback,
+            experiment_snapshot,
         ]
 
         if cfg.training.use_rerun:

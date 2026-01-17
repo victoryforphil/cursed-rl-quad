@@ -5,7 +5,7 @@ training:
   # Directory to store models, logs, and run artifacts
   output_dir: "models"
   # Total number of training timesteps
-  total_timesteps: 1000000
+  total_timesteps: 25000000
   # Number of parallel training environments
   n_envs: 8
   # Global random seed
@@ -13,7 +13,7 @@ training:
   # Optional checkpoint path to resume training
   resume_from: null
   # Enable Rerun logging during training
-  use_rerun: false
+  use_rerun: true
 
 curriculum:
   # Enable staged curriculum training
@@ -25,6 +25,9 @@ curriculum:
       add_sensor_noise: false
       random_start_waypoint: false
       max_waypoints: 1
+      action_scale: 0.6
+      random_start_position: true
+      start_position_noise: 0.2
     - name: "stage_1_short"
       total_timesteps: 300000
       waypoint_noise: 0.25
@@ -113,6 +116,12 @@ env:
   add_sensor_noise: true
   # Max number of waypoints to complete (null = all)
   max_waypoints: null
+  # Action magnitude scale (1.0 = full range)
+  action_scale: 1.0
+  # Randomize initial position around [0, 0, 1]
+  random_start_position: true
+  # Max +/- meters per axis when randomizing start position
+  start_position_noise: 0.2
   # Speed normalization denominator (m/s)
   speed_normalization: 5.0
   # Bounds margin beyond arena limits (meters)
@@ -144,7 +153,7 @@ reward:
   # Penalty for collision with ground or geometry
   collision_penalty: 10.0
   # Penalty for exceeding tilt limit
-  tilt_penalty: 10.0
+  tilt_penalty: 7.0
   # Penalty for going out of bounds
   out_of_bounds_penalty: 5.0
 
@@ -189,6 +198,8 @@ callbacks:
   n_eval_episodes: 5
   # 3D log frequency (global steps)
   log_3d_freq: 3
+  # Write interim summary every N updates
+  summary_update_freq: 10
 
 evaluation:
   # Run in realtime (sleep between steps)

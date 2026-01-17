@@ -85,6 +85,9 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         random_start_waypoint: bool
         | None = None,  # Start from random waypoint (curriculum)
         max_waypoints: int | None = None,  # Limit number of waypoints for curriculum
+        action_scale: float | None = None,  # Scale action magnitude (curriculum)
+        random_start_position: bool | None = None,  # Randomize initial position
+        start_position_noise: float | None = None,  # +/- meters per axis
         quad_params: QuadcopterParams | None = None,
         sensor_params: SensorNoiseParams | None = None,
         add_sensor_noise: bool | None = None,
@@ -142,6 +145,19 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             add_sensor_noise
             if add_sensor_noise is not None
             else env_cfg.add_sensor_noise
+        )
+        self.action_scale = (
+            action_scale if action_scale is not None else env_cfg.action_scale
+        )
+        self.random_start_position = (
+            random_start_position
+            if random_start_position is not None
+            else env_cfg.random_start_position
+        )
+        self.start_position_noise = (
+            start_position_noise
+            if start_position_noise is not None
+            else env_cfg.start_position_noise
         )
         self._speed_normalization = env_cfg.speed_normalization
         self._bounds_margin = env_cfg.bounds_margin
@@ -320,6 +336,15 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
         # Create quadcopter wrapper
         start_pos = np.array([0.0, 0.0, 1.0])
+        if self.random_start_position and self.start_position_noise > 0:
+            start_pos = start_pos + self.np_random.uniform(
+                -self.start_position_noise, self.start_position_noise, size=3
+            )
+            start_pos[2] = max(start_pos[2], self._ground_threshold + 0.1)
+        elif self.random_start_position:
+            jitter = self._ground_threshold + 0.1
+            start_pos = start_pos + self.np_random.uniform(-jitter, jitter, size=3)
+            start_pos[2] = max(start_pos[2], self._ground_threshold + 0.1)
         self._quad = Quadcopter(
             self._model,
             self._data,
@@ -377,7 +402,8 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         self._episode_step += 1
 
         # Apply action
-        self._quad.apply_action(action, self.dt)
+        scaled_action = action * self.action_scale
+        self._quad.apply_action(scaled_action, self.dt)
 
         # Step physics
         mujoco.mj_step(self._model, self._data)
