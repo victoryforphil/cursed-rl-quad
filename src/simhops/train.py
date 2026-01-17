@@ -359,11 +359,13 @@ class MetricsLoggerCallback(BaseCallback):
         self,
         metrics_logger: MetricsLogger,
         summary_update_freq: int,
+        finalize_on_end: bool = True,
         verbose: int = 0,
     ) -> None:
         super().__init__(verbose)
         self._metrics_logger = metrics_logger
         self._summary_update_freq = max(1, summary_update_freq)
+        self._finalize_on_end = finalize_on_end
         self._episode_rewards: list[float] = []
         self._episode_count = 0
         self._update_count = 0
@@ -478,7 +480,8 @@ class MetricsLoggerCallback(BaseCallback):
             )
 
     def _on_training_end(self) -> None:
-        self.finalize()
+        if self._finalize_on_end:
+            self.finalize()
 
     def finalize(self) -> None:
         if self._finalized:
@@ -677,6 +680,7 @@ def _apply_stage_env(cfg: EnvConfig, stage: CurriculumStageConfig | None) -> Env
         waypoint_noise=stage.waypoint_noise
         if stage.waypoint_noise is not None
         else env_cfg.waypoint_noise,
+        waypoint_yaw_random=env_cfg.waypoint_yaw_random,
         max_episode_steps=stage.max_episode_steps
         if stage.max_episode_steps is not None
         else env_cfg.max_episode_steps,
@@ -730,6 +734,7 @@ def train() -> None:
     metrics_callback = MetricsLoggerCallback(
         metrics_logger,
         summary_update_freq=cfg.callbacks.summary_update_freq,
+        finalize_on_end=False,
     )
 
     model: PPO | None = None
@@ -745,8 +750,9 @@ def train() -> None:
             f"Starting stage {stage_index}/{len(stages)}: {stage_label} ({stage_timesteps} timesteps)"
         )
         print(
-            "Env: noise={:.2f}, sensor_noise={}, random_start={}, max_waypoints={}, action_scale={}, start_pos_random={}, start_pos_noise={}".format(
+            "Env: noise={:.2f}, yaw_random={}, sensor_noise={}, random_start={}, max_waypoints={}, action_scale={}, start_pos_random={}, start_pos_noise={}".format(
                 stage_env_cfg.waypoint_noise,
+                stage_env_cfg.waypoint_yaw_random,
                 stage_env_cfg.add_sensor_noise,
                 stage_env_cfg.random_start_waypoint,
                 stage_env_cfg.max_waypoints,
@@ -762,6 +768,7 @@ def train() -> None:
                 add_sensor_noise=stage_env_cfg.add_sensor_noise,
                 include_position=stage_env_cfg.include_position,
                 waypoint_noise=stage_env_cfg.waypoint_noise,
+                waypoint_yaw_random=stage_env_cfg.waypoint_yaw_random,
                 random_start_waypoint=stage_env_cfg.random_start_waypoint,
                 max_waypoints=stage_env_cfg.max_waypoints,
                 max_episode_steps=stage_env_cfg.max_episode_steps,
@@ -790,6 +797,7 @@ def train() -> None:
                 add_sensor_noise=eval_env_cfg.add_sensor_noise,
                 include_position=eval_env_cfg.include_position,
                 waypoint_noise=eval_env_cfg.waypoint_noise,
+                waypoint_yaw_random=eval_env_cfg.waypoint_yaw_random,
                 disable_tilt_termination=eval_env_cfg.disable_tilt_termination,
                 random_start_waypoint=stage_env_cfg.random_start_waypoint,
                 max_waypoints=stage_env_cfg.max_waypoints,

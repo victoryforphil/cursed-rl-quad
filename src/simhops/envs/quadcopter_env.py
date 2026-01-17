@@ -23,8 +23,8 @@ from simhops.core.sensors import SensorModel, SensorNoiseParams, SensorReadings
 class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
     """Gymnasium environment for quadcopter waypoint path following.
 
-    The goal is to navigate through a FIXED 10-waypoint path as quickly as possible.
-    The path is deterministic - same waypoints every episode for consistent training.
+    The goal is to navigate through a 10-waypoint base path as quickly as possible.
+    The base path can be rotated around the origin each episode to avoid overfitting.
 
     Observation space (19 or 22 dimensions):
         - Velocity (3): world frame [vx, vy, vz]
@@ -56,16 +56,16 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
     # Fixed 10-waypoint path - an expanded course with wider spread and varied heights
     # Each waypoint can be randomized by +/- waypoint_noise meters on reset
     FIXED_WAYPOINTS: list[tuple[float, float, float]] = [
-        (4.0, 0.0, 2.5),  # 1: Forward
-        (8.0, 4.0, 3.5),  # 2: Forward-right, climb
-        (6.0, 9.0, 5.0),  # 3: Right, climb more
-        (0.0, 11.0, 6.0),  # 4: Left turn, highest point
-        (-6.0, 8.0, 5.0),  # 5: Continue left, descend
-        (-9.0, 3.0, 4.0),  # 6: Back toward start side
-        (-8.0, -3.0, 3.0),  # 7: Cross to other side
-        (-4.0, -8.0, 4.0),  # 8: Continue around
-        (3.0, -6.0, 2.5),  # 9: Heading back
-        (6.0, -2.0, 2.0),  # 10: Final approach (lower)
+        (5.5, 0.0, 3.3),  # 1: Forward
+        (10.5, 5.5, 4.5),  # 2: Forward-right, climb
+        (7.5, 11.5, 6.2),  # 3: Right, climb more
+        (0.0, 14.0, 7.2),  # 4: Left turn, highest point
+        (-7.5, 10.0, 6.2),  # 5: Continue left, descend
+        (-11.5, 4.0, 5.2),  # 6: Back toward start side
+        (-10.0, -4.0, 4.2),  # 7: Cross to other side
+        (-5.5, -10.5, 5.2),  # 8: Continue around
+        (4.5, -7.5, 3.5),  # 9: Heading back
+        (7.5, -2.5, 3.0),  # 10: Final approach (lower)
     ]
 
     def __init__(
@@ -73,6 +73,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         render_mode: str | None = None,
         waypoint_radius: float | None = None,  # 1m radius to pass through
         waypoint_noise: float | None = None,  # +/- meters randomization per reset
+        waypoint_yaw_random: bool | None = None,  # Randomize waypoint yaw each reset
         max_episode_steps: int | None = None,  # Enough time for full path
         arena_size: float | None = None,  # Large arena for expanded path
         max_altitude: float | None = None,
@@ -110,6 +111,11 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             max_episode_steps
             if max_episode_steps is not None
             else env_cfg.max_episode_steps
+        )
+        self.waypoint_yaw_random = (
+            waypoint_yaw_random
+            if waypoint_yaw_random is not None
+            else env_cfg.waypoint_yaw_random
         )
         self.arena_size = arena_size if arena_size is not None else env_cfg.arena_size
         self.max_altitude = (
@@ -198,6 +204,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
         # Episode state
         self._waypoints: list[NDArray[np.float64]] = []
+        self._waypoint_yaw: float = 0.0
         self._current_waypoint_idx: int = 0
         self._episode_step: int = 0
         self._total_reward: float = 0.0
@@ -234,22 +241,36 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
     def _generate_waypoints(
         self, rng: np.random.Generator
-    ) -> list[NDArray[np.float64]]:
+    ) -> tuple[list[NDArray[np.float64]], float]:
         """Generate waypoints with optional randomization.
 
-        Returns the fixed waypoint path with random noise added to each point.
-        The noise is uniformly sampled from [-waypoint_noise, +waypoint_noise]
-        for each axis (x, y, z), with z clamped to stay above ground.
+        Returns the fixed waypoint path with random yaw rotation applied first,
+        then noise added to each point. Noise is uniformly sampled from
+        [-waypoint_noise, +waypoint_noise] for each axis (x, y, z), with z
+        clamped to stay above ground. Rotation is disabled when
+        waypoint_yaw_random is false.
 
         Args:
             rng: NumPy random generator
 
         Returns:
-            List of waypoint positions as numpy arrays
+            List of waypoint positions as numpy arrays and the applied yaw (rad)
         """
+        yaw = float(rng.uniform(0.0, 2 * math.pi)) if self.waypoint_yaw_random else 0.0
+        cos_yaw = math.cos(yaw)
+        sin_yaw = math.sin(yaw)
+
         waypoints = []
         for base_wp in self.FIXED_WAYPOINTS:
-            wp = np.array(base_wp)
+            wp = np.array(base_wp, dtype=np.float64)
+
+            rotated_xy = np.array(
+                [
+                    wp[0] * cos_yaw - wp[1] * sin_yaw,
+                    wp[0] * sin_yaw + wp[1] * cos_yaw,
+                ]
+            )
+            wp[:2] = rotated_xy
 
             # Add random noise if waypoint_noise > 0
             if self.waypoint_noise > 0:
@@ -261,7 +282,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
             waypoints.append(wp)
 
-        return waypoints
+        return waypoints, yaw
 
     def _get_observation(self, sensor_readings: SensorReadings) -> NDArray[np.float64]:
         """Construct observation from sensor readings and waypoint info."""
@@ -357,7 +378,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
         # Generate fixed waypoints
         assert self.np_random is not None
-        self._waypoints = self._generate_waypoints(self.np_random)
+        self._waypoints, self._waypoint_yaw = self._generate_waypoints(self.np_random)
         max_waypoints = (
             self.max_waypoints if self.max_waypoints is not None else self.num_waypoints
         )
@@ -384,6 +405,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
         info = {
             "waypoints": self._waypoints.copy(),
+            "waypoint_yaw": self._waypoint_yaw,
             "current_waypoint_idx": self._current_waypoint_idx,
             "max_waypoints": max_waypoints,
         }
@@ -456,6 +478,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             "max_waypoints": max_waypoints,
             "waypoint_reached": waypoint_reached,
             "episode_step": self._episode_step,
+            "waypoint_yaw": self._waypoint_yaw,
             # Ground truth for visualization (passed through info dict)
             "position": state.position.copy(),
             "velocity": state.velocity.copy(),

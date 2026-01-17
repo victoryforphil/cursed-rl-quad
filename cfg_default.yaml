@@ -5,9 +5,9 @@ training:
   # Directory to store models, logs, and run artifacts
   output_dir: "models"
   # Total number of training timesteps
-  total_timesteps: 25000000
+  total_timesteps: 15000000
   # Number of parallel training environments
-  n_envs: 8
+  n_envs: 10
   # Global random seed
   seed: 42
   # Optional checkpoint path to resume training
@@ -17,7 +17,7 @@ training:
 
 curriculum:
   # Enable staged curriculum training
-  enabled: false
+  enabled: true
   stages:
     - name: "stage_0_hover"
       total_timesteps: 150000
@@ -55,7 +55,7 @@ curriculum:
 
 ppo:
   # PPO optimizer learning rate
-  learning_rate: 0.0003
+  learning_rate: 0.0005
   # PPO minibatch size
   batch_size: 256
   # Rollout steps per environment before update
@@ -96,18 +96,20 @@ env:
   waypoint_radius: 1.0
   # Waypoint randomization magnitude (+/- meters)
   waypoint_noise: 1.0
+  # Randomize waypoint yaw rotation each reset
+  waypoint_yaw_random: true
   # Max episode steps before truncation
   max_episode_steps: 5000
   # Arena size in meters
-  arena_size: 25.0
+  arena_size: 32.0
   # Maximum allowed altitude in meters
-  max_altitude: 10.0
+  max_altitude: 12.0
   # Maximum tilt angle (radians) before termination
   max_tilt_angle: 1.4
   # Disable tilt-based termination
   disable_tilt_termination: false
   # Max distance used to normalize waypoint vector
-  goal_max_distance: 12.0
+  goal_max_distance: 16.0
   # Include global position in observation
   include_position: false
   # Randomize starting waypoint index
@@ -117,7 +119,7 @@ env:
   # Max number of waypoints to complete (null = all)
   max_waypoints: null
   # Action magnitude scale (1.0 = full range)
-  action_scale: 1.0
+  action_scale: 0.8
   # Randomize initial position around [0, 0, 1]
   random_start_position: true
   # Max +/- meters per axis when randomizing start position
@@ -153,7 +155,7 @@ reward:
   # Penalty for collision with ground or geometry
   collision_penalty: 10.0
   # Penalty for exceeding tilt limit
-  tilt_penalty: 7.0
+  tilt_penalty: 12.0
   # Penalty for going out of bounds
   out_of_bounds_penalty: 5.0
 
@@ -197,9 +199,9 @@ callbacks:
   # Number of eval episodes per evaluation
   n_eval_episodes: 5
   # 3D log frequency (global steps)
-  log_3d_freq: 3
+  log_3d_freq: 5
   # Write interim summary every N updates
-  summary_update_freq: 10
+  summary_update_freq: 100
 
 evaluation:
   # Run in realtime (sleep between steps)
@@ -209,6 +211,8 @@ evaluation:
   env:
     # Waypoint noise for evaluation
     waypoint_noise: 0.0
+    # Randomize waypoint yaw rotation each reset
+    waypoint_yaw_random: false
     # Include global position in observation
     include_position: false
     # Apply sensor noise during evaluation
@@ -224,6 +228,8 @@ demo:
   env:
     # Waypoint noise for demo
     waypoint_noise: 1.0
+    # Randomize waypoint yaw rotation each reset
+    waypoint_yaw_random: true
     # Include global position in observation
     include_position: false
     # Apply sensor noise during demo

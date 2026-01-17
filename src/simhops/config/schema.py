@@ -71,6 +71,7 @@ class VecNormalizeConfig:
 class EnvConfig:
     waypoint_radius: float = 1.0
     waypoint_noise: float = 1.0
+    waypoint_yaw_random: bool = True
     max_episode_steps: int = 5000
     arena_size: float = 25.0
     max_altitude: float = 10.0
@@ -140,6 +141,7 @@ class CallbackConfig:
 @dataclass
 class EvaluationEnvConfig:
     waypoint_noise: float = 0.0
+    waypoint_yaw_random: bool = False
     include_position: bool = False
     add_sensor_noise: bool = True
     disable_tilt_termination: bool = True
@@ -155,6 +157,7 @@ class EvaluationConfig:
 @dataclass
 class DemoEnvConfig:
     waypoint_noise: float = 1.0
+    waypoint_yaw_random: bool = True
     include_position: bool = False
     add_sensor_noise: bool = True
     disable_tilt_termination: bool = False

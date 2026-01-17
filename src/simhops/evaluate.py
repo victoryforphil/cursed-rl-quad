@@ -57,7 +57,7 @@ def evaluate(
     print(f"Loading model from {model_file}")
     model = PPO.load(str(model_file))
 
-    # Create environment (no waypoint noise for consistent evaluation)
+    # Create environment (optionally rotated waypoints, no noise by default)
     env_cfg = eval_cfg.env
     env = QuadcopterEnv(
         render_mode=None,
@@ -65,8 +65,9 @@ def evaluate(
         disable_tilt_termination=env_cfg.disable_tilt_termination,
         include_position=env_cfg.include_position,
         waypoint_noise=env_cfg.waypoint_noise,
+        waypoint_yaw_random=env_cfg.waypoint_yaw_random,
     )
-    print(f"Environment: {env.num_waypoints} waypoints (no randomization)")
+    print(f"Environment: {env.num_waypoints} waypoints (no randomization by default)")
     if env_cfg.disable_tilt_termination:
         print("Tilt termination disabled for evaluation")
 
@@ -239,6 +240,7 @@ def demo_random() -> None:
         disable_tilt_termination=env_cfg.disable_tilt_termination,
         include_position=env_cfg.include_position,
         waypoint_noise=env_cfg.waypoint_noise,
+        waypoint_yaw_random=env_cfg.waypoint_yaw_random,
     )
 
     viz = RerunVisualizer(
