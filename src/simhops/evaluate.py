@@ -210,6 +210,7 @@ def evaluate(
     model_path: str,
     eval_output: Path | None = None,
     episodes: int = 1,
+    run_id: str | None = None,
 ) -> None:
     """Evaluate trained model with Rerun visualization.
 
