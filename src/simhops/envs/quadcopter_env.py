@@ -84,6 +84,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         include_position: bool | None = None,  # Include global position in observations
         random_start_waypoint: bool
         | None = None,  # Start from random waypoint (curriculum)
+        max_waypoints: int | None = None,  # Limit number of waypoints for curriculum
         quad_params: QuadcopterParams | None = None,
         sensor_params: SensorNoiseParams | None = None,
         add_sensor_noise: bool | None = None,
@@ -95,6 +96,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
 
         self.render_mode = render_mode
         self.num_waypoints = len(self.FIXED_WAYPOINTS)  # Always 10
+        self._max_waypoints_effective = self.num_waypoints
         self.waypoint_radius = (
             waypoint_radius if waypoint_radius is not None else env_cfg.waypoint_radius
         )
@@ -132,6 +134,9 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             random_start_waypoint
             if random_start_waypoint is not None
             else env_cfg.random_start_waypoint
+        )
+        self.max_waypoints = (
+            max_waypoints if max_waypoints is not None else env_cfg.max_waypoints
         )
         self.add_sensor_noise = (
             add_sensor_noise
@@ -266,8 +271,9 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         speed_normalized = min(speed / self._speed_normalization, 1.0)
 
         # Normalized waypoint progress (0 = first waypoint, 1 = last waypoint)
-        progress = min(self._current_waypoint_idx, self.num_waypoints - 1) / max(
-            1, self.num_waypoints - 1
+        max_waypoints = max(1, self._max_waypoints_effective)
+        progress = min(self._current_waypoint_idx, max_waypoints - 1) / max(
+            1, max_waypoints - 1
         )
 
         # Build sensor observation (optionally exclude position)
@@ -327,10 +333,13 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         # Generate fixed waypoints
         assert self.np_random is not None
         self._waypoints = self._generate_waypoints(self.np_random)
+        max_waypoints = (
+            self.max_waypoints if self.max_waypoints is not None else self.num_waypoints
+        )
+        max_waypoints = max(1, min(max_waypoints, self.num_waypoints))
+        self._max_waypoints_effective = max_waypoints
         if self.random_start_waypoint:
-            self._current_waypoint_idx = int(
-                self.np_random.integers(0, self.num_waypoints)
-            )
+            self._current_waypoint_idx = int(self.np_random.integers(0, max_waypoints))
         else:
             self._current_waypoint_idx = 0
         self._episode_step = 0
@@ -351,6 +360,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         info = {
             "waypoints": self._waypoints.copy(),
             "current_waypoint_idx": self._current_waypoint_idx,
+            "max_waypoints": max_waypoints,
         }
 
         return obs, info
@@ -399,6 +409,8 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
         reward = self._compute_reward(distance, speed, waypoint_reached)
         self._total_reward += float(reward)
 
+        max_waypoints = self._max_waypoints_effective
+
         # Check termination conditions
         terminated = False
         truncated = False
@@ -415,6 +427,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             "max_tilt_deg": math.degrees(self._episode_max_tilt),
             "time_to_first_wp": self._time_to_first_wp,
             "current_waypoint_idx": self._current_waypoint_idx,
+            "max_waypoints": max_waypoints,
             "waypoint_reached": waypoint_reached,
             "episode_step": self._episode_step,
             # Ground truth for visualization (passed through info dict)
@@ -431,7 +444,7 @@ class QuadcopterEnv(gym.Env[NDArray[np.float64], NDArray[np.float64]]):
             if self._time_to_first_wp is None:
                 self._time_to_first_wp = self._episode_step
 
-            if self._current_waypoint_idx >= self.num_waypoints:
+            if self._current_waypoint_idx >= max_waypoints:
                 # All waypoints completed! Big time bonus
                 terminated = True
                 # Bonus inversely proportional to time taken

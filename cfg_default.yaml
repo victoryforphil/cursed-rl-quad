@@ -15,6 +15,41 @@ training:
   # Enable Rerun logging during training
   use_rerun: false
 
+curriculum:
+  # Enable staged curriculum training
+  enabled: false
+  stages:
+    - name: "stage_0_hover"
+      total_timesteps: 150000
+      waypoint_noise: 0.0
+      add_sensor_noise: false
+      random_start_waypoint: false
+      max_waypoints: 1
+    - name: "stage_1_short"
+      total_timesteps: 300000
+      waypoint_noise: 0.25
+      add_sensor_noise: true
+      random_start_waypoint: false
+      max_waypoints: 3
+    - name: "stage_2_full_low"
+      total_timesteps: 400000
+      waypoint_noise: 0.5
+      add_sensor_noise: true
+      random_start_waypoint: false
+      max_waypoints: 10
+    - name: "stage_3_full_default"
+      total_timesteps: 600000
+      waypoint_noise: 1.0
+      add_sensor_noise: true
+      random_start_waypoint: false
+      max_waypoints: 10
+    - name: "stage_4_full_hard"
+      total_timesteps: 600000
+      waypoint_noise: 1.5
+      add_sensor_noise: true
+      random_start_waypoint: true
+      max_waypoints: 10
+
 ppo:
   # PPO optimizer learning rate
   learning_rate: 0.0003
@@ -76,6 +111,8 @@ env:
   random_start_waypoint: false
   # Apply sensor noise during observation
   add_sensor_noise: true
+  # Max number of waypoints to complete (null = all)
+  max_waypoints: null
   # Speed normalization denominator (m/s)
   speed_normalization: 5.0
   # Bounds margin beyond arena limits (meters)

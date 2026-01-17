@@ -18,6 +18,23 @@ class TrainingConfig:
 
 
 @dataclass
+class CurriculumStageConfig:
+    name: str = "stage"
+    total_timesteps: int = 100_000
+    waypoint_noise: float | None = None
+    add_sensor_noise: bool | None = None
+    random_start_waypoint: bool | None = None
+    max_waypoints: int | None = None
+    max_episode_steps: int | None = None
+
+
+@dataclass
+class CurriculumConfig:
+    enabled: bool = False
+    stages: list[CurriculumStageConfig] = field(default_factory=list)
+
+
+@dataclass
 class NetArchConfig:
     pi: list[int] = field(default_factory=lambda: [256, 256])
     vf: list[int] = field(default_factory=lambda: [256, 256])
@@ -60,6 +77,7 @@ class EnvConfig:
     include_position: bool = False
     random_start_waypoint: bool = False
     add_sensor_noise: bool = True
+    max_waypoints: int | None = None
     speed_normalization: float = 5.0
     bounds_margin: float = 5.0
     ground_threshold: float = 0.05
@@ -153,6 +171,7 @@ class VisualizationConfig:
 @dataclass
 class SimHopsConfig:
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
     ppo: PPOConfig = field(default_factory=PPOConfig)
     vecnormalize: VecNormalizeConfig = field(default_factory=VecNormalizeConfig)
     env: EnvConfig = field(default_factory=EnvConfig)
@@ -175,8 +194,16 @@ def deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any
 
 
 def build_config(data: dict[str, Any]) -> SimHopsConfig:
+    curriculum_data = data.get("curriculum", {})
+    stages_data = curriculum_data.get("stages", [])
+    stages = [CurriculumStageConfig(**stage) for stage in stages_data]
+
     return SimHopsConfig(
         training=TrainingConfig(**data["training"]),
+        curriculum=CurriculumConfig(
+            enabled=curriculum_data.get("enabled", False),
+            stages=stages,
+        ),
         ppo=PPOConfig(
             learning_rate=data["ppo"]["learning_rate"],
             batch_size=data["ppo"]["batch_size"],
