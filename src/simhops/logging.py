@@ -14,6 +14,9 @@ _LOGGER = logging.getLogger(_LOGGER_NAME)
 _CONFIGURED = False
 _LOG_PATH: Path | None = None
 _RUN_ID: str | None = None
+_FILE_HANDLER: logging.FileHandler | None = None
+_RERUN_HANDLER: logging.Handler | None = None
+_STREAM_HANDLER: logging.StreamHandler | None = None
 
 
 def setup_run_logging(
@@ -37,34 +40,49 @@ def setup_run_logging(
     global _CONFIGURED
     global _LOG_PATH
     global _RUN_ID
+    global _FILE_HANDLER
+    global _RERUN_HANDLER
+    global _STREAM_HANDLER
 
     run_dir = Path(data_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "run.log"
 
-    if not _CONFIGURED:
-        _LOGGER.setLevel(level)
-        _LOGGER.propagate = False
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-        formatter = logging.Formatter(
-            fmt="%(asctime)s %(levelname)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+    _LOGGER.setLevel(level)
+    _LOGGER.propagate = False
 
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(level)
-        file_handler.setFormatter(formatter)
-        _LOGGER.addHandler(file_handler)
+    if _FILE_HANDLER is not None:
+        _LOGGER.removeHandler(_FILE_HANDLER)
+        _FILE_HANDLER.close()
 
-        try:
-            rerun_handler = rr.LoggingHandler(rerun_entity_path)
-            rerun_handler.setLevel(level)
-            _LOGGER.addHandler(rerun_handler)
-        except Exception:
-            pass
+    _FILE_HANDLER = logging.FileHandler(log_path, encoding="utf-8")
+    _FILE_HANDLER.setLevel(level)
+    _FILE_HANDLER.setFormatter(formatter)
+    _LOGGER.addHandler(_FILE_HANDLER)
 
-        _CONFIGURED = True
+    if _STREAM_HANDLER is None:
+        _STREAM_HANDLER = logging.StreamHandler()
+        _STREAM_HANDLER.setFormatter(formatter)
+        _LOGGER.addHandler(_STREAM_HANDLER)
 
+    _STREAM_HANDLER.setLevel(level)
+
+    if _RERUN_HANDLER is not None:
+        _LOGGER.removeHandler(_RERUN_HANDLER)
+
+    try:
+        _RERUN_HANDLER = rr.LoggingHandler(rerun_entity_path)
+        _RERUN_HANDLER.setLevel(level)
+        _LOGGER.addHandler(_RERUN_HANDLER)
+    except Exception:
+        _RERUN_HANDLER = None
+
+    _CONFIGURED = True
     _LOG_PATH = log_path
     _RUN_ID = run_id
     return log_path
